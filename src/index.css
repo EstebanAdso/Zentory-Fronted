@@ -1,0 +1,87 @@
+@import "tailwindcss";
+
+@theme {
+  --color-nav: #343a40;
+  --color-nav-active: #4488ee;
+}
+
+/* Custom CSS for elements that are hard to replicate with Tailwind alone */
+
+/* Barcode items */
+.codigo-barras-item {
+  display: inline-flex;
+  align-items: center;
+  background: #2c3e50;
+  color: #ffffff;
+  border-radius: 20px;
+  padding: 6px 12px;
+  margin: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background 0.3s;
+}
+
+.codigo-barras-item:hover {
+  background: #34495e;
+}
+
+.codigo-barras-item .eliminar-codigo {
+  margin-left: 8px;
+  background: transparent;
+  border: none;
+  color: #ff6b6b;
+  font-weight: bold;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0;
+}
+
+/* Toast animations */
+@keyframes toastSlideIn {
+  from { transform: translateX(110%); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+@keyframes toastSlideOut {
+  from { transform: translateX(0);    opacity: 1; }
+  to   { transform: translateX(110%); opacity: 0; }
+}
+
+.toast-enter { animation: toastSlideIn 0.3s ease forwards; }
+.toast-exit  { animation: toastSlideOut 0.3s ease forwards; }
+
+/* Table alternating rows for facturación cart */
+.factura-table tbody tr:nth-child(odd) td  { background-color: #f0f8ff; }
+.factura-table tbody tr:nth-child(even) td { background-color: #f2ffed; }
+
+/* Grupo fecha (ventas view) */
+.grupo-fecha {
+  margin-bottom: 2rem;
+  border: 1px solid #dee2e6;
+  border-radius: 5px;
+  overflow: hidden;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+/* Scrollbar thin */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #f1f1f1; }
+::-webkit-scrollbar-thumb { background: #888; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #555; }
+
+/* Reset body margin */
+body { margin: 0; }
+
+/* Facturación — matches original #contenedorPrincipalFacturacion CSS */
+#contenedorPrincipalFacturacion {
+  width: 65%;
+}
+
+@media (max-width: 1920px) {
+  #contenedorPrincipalFacturacion {
+    width: 85%;
+  }
+  #contenedorPrincipalFacturacion fieldset {
+    padding: 2px;
+  }
+}
