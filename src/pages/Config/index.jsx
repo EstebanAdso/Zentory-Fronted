@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import {
   FileSearch, BarChart3, Warehouse, FolderTree, CircleDollarSign,
   TrendingUp, ClipboardList, UserCog, ArrowLeft, Plus, Pencil,
-  Trash2, X, RefreshCw, Tag,
+  Trash2, X, RefreshCw, Tag, Settings, ChevronRight, Loader2,
 } from 'lucide-react';
 import ConfirmModal from '../../components/ConfirmModal';
 import {
@@ -12,30 +12,45 @@ import {
 
 // ── Hub cards ───────────────────────────────────────────────────────────────
 const SECCIONES = [
-  { id: 'auditoria',  titulo: 'Auditoría',               icon: FileSearch,       color: 'from-[#8e44ad] to-[#6c3483]' },
-  { id: 'estadisticas', titulo: 'Estadísticas',         icon: BarChart3,        color: 'from-[#2980b9] to-[#1f618d]' },
-  { id: 'inventario', titulo: 'Configuración de Inventario', icon: Warehouse,   color: 'from-[#16a085] to-[#117864]' },
-  { id: 'categorias', titulo: 'Categorías',              icon: FolderTree,       color: 'from-[#d35400] to-[#a04000]' },
-  { id: 'caja',       titulo: 'Caja',                    icon: CircleDollarSign, color: 'from-[#27ae60] to-[#1e8449]' },
-  { id: 'repVentas',  titulo: 'Reportes de ventas',      icon: TrendingUp,       color: 'from-[#c0392b] to-[#922b21]' },
-  { id: 'repInv',     titulo: 'Reportes de inventario',  icon: ClipboardList,    color: 'from-[#f39c12] to-[#b9770e]' },
-  { id: 'usuario',    titulo: 'Configuración de usuario', icon: UserCog,         color: 'from-[#34495e] to-[#212f3d]' },
+  { id: 'auditoria', titulo: 'Auditoría', desc: 'Consulta el historial de cambios y eventos del sistema', icon: FileSearch, accent: 'violet' },
+  { id: 'estadisticas', titulo: 'Estadísticas', desc: 'Gráficas y métricas del negocio en tiempo real', icon: BarChart3, accent: 'sky' },
+  { id: 'inventario', titulo: 'Configuración de Inventario', desc: 'Parámetros de stock, alertas y ajustes', icon: Warehouse, accent: 'teal' },
+  { id: 'categorias', titulo: 'Categorías', desc: 'Administra las categorías y sus garantías', icon: FolderTree, accent: 'orange' },
+  { id: 'caja', titulo: 'Caja', desc: 'Apertura, cierre y movimientos de caja', icon: CircleDollarSign, accent: 'emerald' },
+  { id: 'repVentas', titulo: 'Reportes de ventas', desc: 'Reportes diarios, semanales y por vendedor', icon: TrendingUp, accent: 'rose' },
+  { id: 'repInv', titulo: 'Reportes de inventario', desc: 'Existencias, valorizados y rotación', icon: ClipboardList, accent: 'amber' },
+  { id: 'usuario', titulo: 'Configuración de usuario', desc: 'Perfil, preferencias y credenciales', icon: UserCog, accent: 'slate' },
 ];
 
-function HubCard({ titulo, icon: Icon, color, onClick }) {
+const ACCENTS = {
+  violet: { bg: 'bg-violet-50', fg: 'text-violet-600', ring: 'group-hover:ring-violet-200', bar: 'bg-violet-500' },
+  sky: { bg: 'bg-sky-50', fg: 'text-sky-600', ring: 'group-hover:ring-sky-200', bar: 'bg-sky-500' },
+  teal: { bg: 'bg-teal-50', fg: 'text-teal-600', ring: 'group-hover:ring-teal-200', bar: 'bg-teal-500' },
+  orange: { bg: 'bg-orange-50', fg: 'text-orange-600', ring: 'group-hover:ring-orange-200', bar: 'bg-orange-500' },
+  emerald: { bg: 'bg-emerald-50', fg: 'text-emerald-600', ring: 'group-hover:ring-emerald-200', bar: 'bg-emerald-500' },
+  rose: { bg: 'bg-rose-50', fg: 'text-rose-600', ring: 'group-hover:ring-rose-200', bar: 'bg-rose-500' },
+  amber: { bg: 'bg-amber-50', fg: 'text-amber-600', ring: 'group-hover:ring-amber-200', bar: 'bg-amber-500' },
+  slate: { bg: 'bg-slate-100', fg: 'text-slate-600', ring: 'group-hover:ring-slate-200', bar: 'bg-slate-500' },
+};
+
+function HubCard({ titulo, desc, icon: Icon, accent, onClick }) {
+  const a = ACCENTS[accent] ?? ACCENTS.slate;
   return (
     <button
       onClick={onClick}
-      className={`
-        bg-gradient-to-br ${color} text-white rounded-xl shadow-sm
-        hover:shadow-xl hover:-translate-y-1 transition-all duration-300 ease-out
-        p-6 flex flex-col items-center justify-center gap-3 text-center
-        focus:outline-none focus-visible:ring-4 focus-visible:ring-white/40
-        cursor-pointer select-none min-h-[160px]
-      `}
+      className="group text-left bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 p-5 flex flex-col gap-3 relative overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-[#4488ee]/40"
     >
-      <Icon size={44} strokeWidth={1.75} />
-      <span className="font-semibold text-base leading-tight">{titulo}</span>
+      <span className={`absolute top-0 left-0 w-1 h-full ${a.bar} opacity-0 group-hover:opacity-100 transition-opacity`} />
+      <div className="flex items-start justify-between">
+        <div className={`w-12 h-12 rounded-xl ${a.bg} ${a.fg} flex items-center justify-center ring-4 ring-transparent transition-all ${a.ring}`}>
+          <Icon size={24} strokeWidth={2} />
+        </div>
+        <ChevronRight size={18} className="text-slate-300 group-hover:text-slate-500 group-hover:translate-x-0.5 transition-all" />
+      </div>
+      <div>
+        <h3 className="font-bold text-slate-900 text-base leading-tight">{titulo}</h3>
+        <p className="text-xs text-slate-500 mt-1 leading-snug">{desc}</p>
+      </div>
     </button>
   );
 }
@@ -43,27 +58,29 @@ function HubCard({ titulo, icon: Icon, color, onClick }) {
 // ── Fila de categoría ───────────────────────────────────────────────────────
 const FilaCategoria = memo(function FilaCategoria({ categoria, onEditar, onEliminar }) {
   return (
-    <tr className="even:bg-gray-50 hover:bg-orange-50/40 transition-colors">
-      <td className="border border-gray-300 px-3 py-2 font-medium">{categoria.nombre}</td>
-      <td className="border border-gray-300 px-3 py-2">{categoria.descripcion || <span className="text-gray-400 italic">No tiene</span>}</td>
-      <td className="border border-gray-300 px-3 py-2">
-        {categoria.descripcionGarantia || <span className="text-gray-400 italic">No tiene</span>}
+    <tr className="hover:bg-slate-50/70 border-b border-slate-100 last:border-0">
+      <td className="px-4 py-3 font-semibold text-slate-800">{categoria.nombre}</td>
+      <td className="px-4 py-3 text-slate-600">
+        {categoria.descripcion || <span className="text-slate-400 italic">Sin descripción</span>}
       </td>
-      <td className="border border-gray-300 px-3 py-2">
-        <div className="flex justify-center gap-2">
+      <td className="px-4 py-3 text-slate-600">
+        {categoria.descripcionGarantia || <span className="text-slate-400 italic">Sin garantía</span>}
+      </td>
+      <td className="px-4 py-3">
+        <div className="flex justify-center gap-1.5">
           <button
             onClick={() => onEditar(categoria)}
             title="Editar categoría"
-            className="inline-flex items-center justify-center bg-[#28a745] hover:bg-[#218838] text-white rounded p-1.5 transition-colors"
+            className="inline-flex items-center justify-center w-8 h-8 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-lg transition-colors"
           >
-            <Pencil size={12} />
+            <Pencil size={14} />
           </button>
           <button
             onClick={() => onEliminar(categoria)}
             title="Eliminar categoría"
-            className="inline-flex items-center justify-center bg-[#dc3545] hover:bg-[#c82333] text-white rounded p-1.5 transition-colors"
+            className="inline-flex items-center justify-center w-8 h-8 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg transition-colors"
           >
-            <Trash2 size={12} />
+            <Trash2 size={14} />
           </button>
         </div>
       </td>
@@ -76,20 +93,22 @@ function Modal({ show, onClose, title, children }) {
   if (!show) return null;
   return (
     <div
-      className="fixed inset-0 z-[1050] bg-black/50 flex items-start justify-center pt-16 overflow-y-auto"
+      className="fixed inset-0 z-[1050] bg-slate-900/60 backdrop-blur-sm flex items-start justify-center pt-16 overflow-y-auto"
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-white rounded-md shadow-xl mb-8 w-[520px] max-w-[96vw]">
-        <div className="flex items-center justify-between px-5 py-3 border-b border-gray-300 bg-[#d35400] text-white rounded-t-md">
-          <h5 className="m-0 text-base font-semibold">{title}</h5>
+      <div className="bg-white rounded-2xl shadow-2xl mb-8 w-[540px] max-w-[96vw] overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 bg-slate-900 text-white">
+          <h5 className="m-0 text-base font-bold inline-flex items-center gap-2">
+            <Tag size={18} className="text-orange-400" /> {title}
+          </h5>
           <button
             onClick={onClose}
-            className="text-white/90 hover:text-white text-2xl leading-none"
+            className="text-white/80 hover:text-white transition-colors"
           >
             <X size={20} />
           </button>
         </div>
-        <div className="px-5 py-4">{children}</div>
+        <div className="px-6 py-5">{children}</div>
       </div>
     </div>
   );
@@ -189,123 +208,146 @@ function SeccionCategorias({ onVolver }) {
   }), [cargar]);
 
   return (
-    <>
-      <div className="flex items-center justify-between mb-5 gap-2">
-        <button
-          onClick={onVolver}
-          className="inline-flex items-center gap-1.5 border border-gray-300 hover:bg-gray-50 text-gray-700 rounded px-3 py-1.5 text-sm transition-colors"
-        >
-          <ArrowLeft size={14} /> Volver
-        </button>
-        <h1 className="text-2xl font-semibold m-0 inline-flex items-center gap-2">
-          <Tag size={24} className="text-[#d35400]" /> Listado de Categorías
-        </h1>
-        <div className="flex gap-2">
-          <button
-            onClick={() => cargar()}
-            className="inline-flex items-center gap-1.5 border border-gray-300 hover:bg-gray-50 text-gray-700 rounded px-3 py-1.5 text-sm transition-colors"
-          >
-            <RefreshCw size={14} /> Actualizar
-          </button>
-          <button
-            onClick={abrirAgregar}
-            className="inline-flex items-center gap-1.5 bg-[#d35400] hover:bg-[#a04000] text-white rounded px-3 py-1.5 text-sm transition-colors"
-          >
-            <Plus size={14} /> Agregar Categoría
-          </button>
+    <div className="h-screen flex flex-col bg-slate-50">
+      {/* Page header */}
+      <header className="shrink-0 bg-white border-b border-slate-200 px-8 py-5">
+        <div className="max-w-[1800px] mx-auto w-full flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onVolver}
+              className="inline-flex items-center gap-1.5 border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-lg px-3 h-9 text-sm font-semibold transition-colors"
+            >
+              <ArrowLeft size={14} /> Volver
+            </button>
+            <div>
+              <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+                <Tag size={26} className="text-orange-500" /> Categorías
+              </h1>
+              <p className="text-sm text-slate-500 mt-0.5">
+                {loading ? 'Cargando…' : `${categorias.length} categoría${categorias.length === 1 ? '' : 's'} registradas`}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => cargar()}
+              disabled={loading}
+              className="inline-flex items-center gap-1.5 h-9 px-3 border border-slate-200 hover:bg-slate-100 disabled:opacity-60 text-slate-700 rounded-lg text-sm font-semibold transition-colors"
+            >
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Actualizar
+            </button>
+            <button
+              onClick={abrirAgregar}
+              className="inline-flex items-center gap-1.5 h-9 px-4 bg-[#4488ee] hover:bg-[#3672c9] text-white rounded-lg text-sm font-bold transition-colors shadow-sm shadow-[#4488ee]/20"
+            >
+              <Plus size={16} /> Agregar Categoría
+            </button>
+          </div>
         </div>
-      </div>
+      </header>
 
-      {/* Tabla */}
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr className="bg-gray-100">
-              <th className="border border-gray-300 px-3 py-2 text-left w-48">Nombre</th>
-              <th className="border border-gray-300 px-3 py-2 text-left">Descripción</th>
-              <th className="border border-gray-300 px-3 py-2 text-left">Descripción de Garantía</th>
-              <th className="border border-gray-300 px-3 py-2 text-center w-28">Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan={4} className="border border-gray-300 text-center text-gray-500 py-6">
-                  Cargando categorías…
-                </td>
-              </tr>
-            ) : categorias.length === 0 ? (
-              <tr>
-                <td colSpan={4} className="border border-gray-300 text-center text-gray-500 py-6">
-                  No hay categorías registradas
-                </td>
-              </tr>
-            ) : (
-              categorias.map((c) => (
-                <FilaCategoria
-                  key={c.id}
-                  categoria={c}
-                  onEditar={abrirEditar}
-                  onEliminar={confirmarEliminar}
-                />
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+      {/* Content — no page scroll, only table scrolls internally */}
+      <main className="flex-1 min-h-0 px-8 py-6 overflow-hidden">
+        <div className="max-w-[1800px] mx-auto w-full h-full bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="h-full overflow-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr>
+                  <th className="sticky top-0 z-10 bg-slate-50 px-4 py-3 text-left font-bold text-slate-600 text-xs uppercase tracking-wide w-56 border-b border-slate-200">Nombre</th>
+                  <th className="sticky top-0 z-10 bg-slate-50 px-4 py-3 text-left font-bold text-slate-600 text-xs uppercase tracking-wide border-b border-slate-200">Descripción</th>
+                  <th className="sticky top-0 z-10 bg-slate-50 px-4 py-3 text-left font-bold text-slate-600 text-xs uppercase tracking-wide border-b border-slate-200">Descripción de Garantía</th>
+                  <th className="sticky top-0 z-10 bg-slate-50 px-4 py-3 text-center font-bold text-slate-600 text-xs uppercase tracking-wide w-32 border-b border-slate-200">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan={4} className="text-center text-slate-500 py-12">
+                      <Loader2 size={24} className="animate-spin mx-auto text-[#4488ee]" />
+                      <p className="mt-2 text-sm">Cargando categorías…</p>
+                    </td>
+                  </tr>
+                ) : categorias.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="text-center text-slate-500 py-12">
+                      <Tag size={32} className="mx-auto text-slate-300" />
+                      <p className="mt-2 text-sm">No hay categorías registradas</p>
+                    </td>
+                  </tr>
+                ) : (
+                  categorias.map((c) => (
+                    <FilaCategoria
+                      key={c.id}
+                      categoria={c}
+                      onEditar={abrirEditar}
+                      onEliminar={confirmarEliminar}
+                    />
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </main>
 
       <Modal
         show={showModal}
         onClose={cerrarModal}
         title={editingId ? 'Editar Categoría' : 'Agregar Categoría'}
       >
-        <form onSubmit={guardar} className="space-y-3">
+        <form onSubmit={guardar} className="space-y-4">
           <div>
-            <label className="block text-sm mb-1 font-medium">Nombre de la Categoría</label>
+            <label className="block text-xs font-bold text-slate-600 uppercase tracking-wide mb-1.5">
+              Nombre de la Categoría
+            </label>
             <input
               type="text"
               autoComplete="off"
               value={form.nombre}
               onChange={(e) => setForm((f) => ({ ...f, nombre: e.target.value.toUpperCase() }))}
-              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm outline-none focus:border-[#d35400]"
+              className="w-full border-2 border-slate-200 rounded-lg px-3 h-10 text-sm outline-none focus:border-[#4488ee] focus:ring-2 focus:ring-[#4488ee]/20 transition-all"
               required
               autoFocus
             />
           </div>
           <div>
-            <label className="block text-sm mb-1 font-medium">Descripción</label>
+            <label className="block text-xs font-bold text-slate-600 uppercase tracking-wide mb-1.5">
+              Descripción
+            </label>
             <textarea
               rows="2"
               value={form.descripcion}
               onChange={(e) => setForm((f) => ({ ...f, descripcion: e.target.value }))}
               placeholder="Agregue una descripción de la categoría (Opcional)"
-              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm outline-none focus:border-[#d35400] resize-y"
+              className="w-full border-2 border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#4488ee] focus:ring-2 focus:ring-[#4488ee]/20 transition-all resize-y"
             />
           </div>
           <div>
-            <label className="block text-sm mb-1 font-medium">Descripción de Garantía</label>
+            <label className="block text-xs font-bold text-slate-600 uppercase tracking-wide mb-1.5">
+              Descripción de Garantía
+            </label>
             <textarea
               rows="2"
               value={form.descripcionGarantia}
               onChange={(e) => setForm((f) => ({ ...f, descripcionGarantia: e.target.value }))}
               placeholder="Agregue una descripción de garantía (Opcional)"
-              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm outline-none focus:border-[#d35400] resize-y"
+              className="w-full border-2 border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#4488ee] focus:ring-2 focus:ring-[#4488ee]/20 transition-all resize-y"
             />
           </div>
           <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"
               onClick={cerrarModal}
-              className="px-4 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded text-sm transition-colors"
+              className="px-4 h-10 border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-lg text-sm font-semibold transition-colors"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-[#d35400] hover:bg-[#a04000] disabled:opacity-60 text-white rounded text-sm transition-colors"
+              className="inline-flex items-center gap-1.5 px-4 h-10 bg-[#4488ee] hover:bg-[#3672c9] disabled:opacity-60 text-white rounded-lg text-sm font-bold transition-colors shadow-sm shadow-[#4488ee]/20"
             >
-              {editingId ? <Pencil size={14} /> : <Plus size={14} />}
+              {saving ? <Loader2 size={14} className="animate-spin" /> : (editingId ? <Pencil size={14} /> : <Plus size={14} />)}
               {saving ? 'Guardando...' : 'Guardar'}
             </button>
           </div>
@@ -321,7 +363,42 @@ function SeccionCategorias({ onVolver }) {
         onCancelar={() => setConfirm(null)}
         danger={confirm?.danger}
       />
-    </>
+    </div>
+  );
+}
+
+// ── Hub ─────────────────────────────────────────────────────────────────────
+function Hub({ onCardClick }) {
+  return (
+    <div className="h-screen flex flex-col bg-slate-50">
+      <header className="shrink-0 bg-white border-b border-slate-200 px-8 py-5">
+        <div className="max-w-[1800px] mx-auto w-full">
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+            <Settings size={26} className="text-[#4488ee]" /> Configuración
+          </h1>
+          <p className="text-sm text-slate-500 mt-0.5">
+            Administra módulos, reportes y parámetros del sistema
+          </p>
+        </div>
+      </header>
+
+      <main className="flex-1 overflow-y-auto px-8 py-8">
+        <div className="max-w-[1400px] mx-auto">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {SECCIONES.map((s) => (
+              <HubCard
+                key={s.id}
+                titulo={s.titulo}
+                desc={s.desc}
+                icon={s.icon}
+                accent={s.accent}
+                onClick={() => onCardClick(s.id)}
+              />
+            ))}
+          </div>
+        </div>
+      </main>
+    </div>
   );
 }
 
@@ -337,31 +414,8 @@ export default function Config() {
     }
   };
 
-  return (
-    <div className="pt-[55px] min-h-screen bg-white">
-      <div className="w-[92%] max-w-[1500px] mx-auto px-4 py-5">
-        {seccion === 'hub' ? (
-          <>
-            <h1 className="text-center text-2xl font-semibold select-none">Configuración</h1>
-            <p className="text-center text-gray-500 mb-6">
-              Administra los módulos, reportes y parámetros del sistema
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {SECCIONES.map((s) => (
-                <HubCard
-                  key={s.id}
-                  titulo={s.titulo}
-                  icon={s.icon}
-                  color={s.color}
-                  onClick={() => onCardClick(s.id)}
-                />
-              ))}
-            </div>
-          </>
-        ) : (
-          <SeccionCategorias onVolver={() => setSeccion('hub')} />
-        )}
-      </div>
-    </div>
-  );
+  if (seccion === 'categorias') {
+    return <SeccionCategorias onVolver={() => setSeccion('hub')} />;
+  }
+  return <Hub onCardClick={onCardClick} />;
 }

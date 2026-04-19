@@ -12,8 +12,8 @@ import {
   generarPrestamoHTMLPDF, generarPrestamoHTMLPOS,
 } from '../../utils/printing';
 import {
-  CircleDollarSign, ShoppingBag, Plus, Trash2, Edit, Search, Tag, 
-  Printer, FileText, XCircle, Eraser
+  ShoppingBag, Plus, Trash2, Edit, Search, Tag, FileSignature,
+  Printer, FileText, XCircle, Eraser, Receipt, Eye, EyeOff,
 } from 'lucide-react';
 
 // ── LocalStorage ───────────────────────────────────────────────────────────
@@ -29,6 +29,9 @@ function useBarcodeScanner(onDetect) {
   const buf = useRef(''), lastKey = useRef(0);
   useEffect(() => {
     function handler(e) {
+      const tag = e.target?.tagName;
+      const editable = e.target?.isContentEditable;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || editable) return;
       const now = Date.now(), gap = now - lastKey.current;
       lastKey.current = now;
       if (e.key === 'Enter') { const c = buf.current.trim(); buf.current = ''; if (c.length >= 3) onDetect(c); return; }
@@ -38,46 +41,6 @@ function useBarcodeScanner(onDetect) {
     return () => window.removeEventListener('keydown', handler);
   }, [onDetect]);
 }
-
-// ── Shared styles ──────────────────────────────────────────────────────────
-const iSt = {
-  width: '100%',
-  border: '1px solid #cbd5e1',
-  borderRadius: '8px',
-  padding: '11px 14px',
-  fontSize: '0.95em',
-  color: '#1e293b',
-  backgroundColor: '#fff',
-  boxSizing: 'border-box',
-  outline: 'none',
-  transition: 'all 0.2s',
-  fontWeight: '500'
-};
-
-const lSt = { 
-  display: 'block', 
-  fontSize: '0.88em', 
-  marginBottom: '6px', 
-  fontWeight: '700', 
-  color: '#1e293b' 
-};
-
-const fsSt = (extra = {}) => ({
-  border: '1px solid #e2e8f0',
-  borderRadius: '12px',
-  padding: '18px',
-  marginBottom: '16px',
-  backgroundColor: '#fff',
-  ...extra,
-});
-
-const lgSt = { 
-  fontSize: '0.85em', 
-  padding: '0 8px', 
-  fontWeight: '700', 
-  color: '#0f172a',
-  backgroundColor: '#fff',
-};
 
 // ─────────────────────────────────────────────────────────────────────────────
 export default function Facturacion() {
@@ -98,7 +61,6 @@ export default function Facturacion() {
   const [confirm, setConfirm] = useState(null);
   const tCli = useRef(null), tProd = useRef(null);
 
-  // ── Load localStorage ──────────────────────────────────────────────────
   useEffect(() => {
     const s = {}; CLI_FIELDS.forEach(f => { s[f] = lsGet(f); }); setCliente(s);
     const stored = localStorage.getItem(LS_PROD);
@@ -108,7 +70,6 @@ export default function Facturacion() {
   }, []);
   useEffect(() => { localStorage.setItem(LS_PROD, JSON.stringify(carrito)); }, [carrito]);
 
-  // ── Barcode ────────────────────────────────────────────────────────────
   const onBarcode = useCallback(async codigo => {
     toast.info('Buscando producto por código de barras...');
     try {
@@ -120,7 +81,6 @@ export default function Facturacion() {
   }, []);
   useBarcodeScanner(onBarcode);
 
-  // ── Cliente ────────────────────────────────────────────────────────────
   async function fetchCli(q) {
     if (q.length < 2) { setSugCli([]); setShowCli(false); return; }
     try { const { data } = await getClienteSugerencias(q); setSugCli(data); setShowCli(data.length > 0); } catch { }
@@ -134,7 +94,6 @@ export default function Facturacion() {
     setCliente(u); CLI_FIELDS.forEach(f => lsSet(f, u[f])); setSugCli([]); setShowCli(false);
   }
 
-  // ── Producto ───────────────────────────────────────────────────────────
   async function fetchProd(q) {
     if (q.length < 3) { setSugProd([]); setShowProd(false); return; }
     setProdSel(null);
@@ -159,7 +118,6 @@ export default function Facturacion() {
     if (prodSel) { const precio = checked && prodSel.precioMayorista > 0 ? prodSel.precioMayorista : prodSel.precioVendido; setProd(p => ({ ...p, precio: formatNumber(precio) })); }
   }
 
-  // ── Carrito ────────────────────────────────────────────────────────────
   const clearFields = () => {
     setProd({ nombre: '', precio: '', cantidad: '1', pc: '', garantia: '1', descripcion: '' });
     setProdSel(null);
@@ -192,7 +150,6 @@ export default function Facturacion() {
   const totalCarrito = carrito.reduce((acc, item) => acc + item.total, 0) * (1 - (parseFloat(descGen) || 0) / 100);
   const totalSinDesc = carrito.reduce((acc, item) => acc + (item.precioOriginal * item.cantidad), 0);
   const ahorroTotal = totalSinDesc - totalCarrito;
-  const ahorroPorc = totalSinDesc > 0 ? (ahorroTotal / totalSinDesc) * 100 : 0;
 
   function limpiarProd() {
     setProd({ nombre: '', precio: '', pc: '', cantidad: '1', garantia: '1', descripcion: '' });
@@ -214,13 +171,11 @@ export default function Facturacion() {
     else cb();
   }
 
-  // ── Payloads ───────────────────────────────────────────────────────────
   const mkFact = fecha => ({ clienteNombre: cliente.nombreCliente, clienteCedula: cliente.cedulaNit, telefono: cliente.telefonoCliente || null, correo: cliente.correoCliente || null, direccion: cliente.direccionCliente || null, fechaCreacion: fecha, detalles: carrito.map(p => ({ productoId: p.id || '', nombreProducto: p.nombre, cantidad: p.cantidad, precioVenta: p.precioUnitario, garantia: `${p.garantia} Mes.`, descripcion: p.descripcion || '', precioCompra: p.pc || null })) });
   const mkPrest = ab => ({ clienteNombre: cliente.nombreCliente, clienteCedula: cliente.cedulaNit, telefono: cliente.telefonoCliente || null, correo: cliente.correoCliente || null, direccion: cliente.direccionCliente || null, tipo: tipDoc, observaciones: obs || null, abonoInicial: ab > 0 ? ab : null, metodoPagoAbono: ab > 0 ? 'EFECTIVO' : null, detalles: carrito.map(p => ({ productoId: p.id || null, nombreProducto: p.nombre, cantidad: p.cantidad, precioVenta: p.precioUnitario, garantia: `${p.garantia} Mes.`, descripcion: p.descripcion || '', precioCompra: p.pc || null })) });
   const hPOS = items => items.map(p => `<tr style="font-size:12px;color:#000"><td style="padding:1px 0;text-align:left;max-width:20mm;word-wrap:break-word;">${p.nombre.toUpperCase()} - ${p.descripcion || ''}</td><td style="text-align:center;">${p.cantidad}</td><td style="text-align:center;">${p.precioUnitario.toLocaleString('es-CO', { minimumFractionDigits: 0 })}</td><td style="text-align:center;">${p.garantia} Mes</td><td style="text-align:center;">${p.total.toLocaleString('es-CO', { minimumFractionDigits: 0 })}</td></tr>`).join('');
   const hPDF = items => items.map(p => `<tr><td style="border:1px solid #ddd;padding:8px;">${p.nombre.toUpperCase()}</td><td style="border:1px solid #ddd;padding:8px;text-align:center;">${p.cantidad}</td><td style="border:1px solid #ddd;padding:8px;text-align:right;">${p.precioUnitario.toLocaleString('es-CO', { minimumFractionDigits: 0 })}</td><td style="border:1px solid #ddd;padding:8px;">${p.garantia} Mes</td><td style="border:1px solid #ddd;padding:8px;">${p.descripcion || 'Excelente calidad'}</td><td style="border:1px solid #ddd;padding:8px;text-align:right;">${p.total.toLocaleString('es-CO', { minimumFractionDigits: 0 })}</td></tr>`).join('');
 
-  // ── Actions ────────────────────────────────────────────────────────────
   async function accionFact(fn) {
     confirmSinAgregar(async () => {
       if (!validar()) return;
@@ -276,34 +231,511 @@ export default function Facturacion() {
   }
 
   return (
-    <>
+    <div className="h-screen flex flex-col bg-slate-50">
+      {/* Page header */}
+      <header className="shrink-0 bg-white border-b border-slate-200 px-8 py-4">
+        <div className="max-w-[1800px] mx-auto w-full flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            <h1 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+              <Receipt size={26} className="text-[#4488ee]" /> {titulo}
+            </h1>
+            <p className="text-sm text-slate-500 mt-0.5">
+              {carrito.length === 0 ? 'Comienza agregando productos al carrito' : `${carrito.length} ${carrito.length === 1 ? 'producto' : 'productos'} en el carrito · Total $${formatNumber(Math.round(totalCarrito))}`}
+            </p>
+          </div>
+          <button
+            onClick={limpiarTodo}
+            className="inline-flex items-center gap-1.5 h-9 px-3 border border-slate-200 hover:bg-slate-100 text-slate-700 rounded-lg text-sm font-semibold transition-colors"
+          >
+            <XCircle size={14} /> Limpiar Todo
+          </button>
+        </div>
+      </header>
+
+      {/* Content */}
+      <main className="flex-1 overflow-hidden px-6 py-4">
+        <div className="h-full grid grid-cols-1 lg:grid-cols-2 lg:grid-rows-1 gap-6 max-w-[1800px] mx-auto">
+
+          {/* ── LEFT COLUMN: ENTRY ── */}
+          <div className="h-full overflow-y-auto pr-1 space-y-4 scroll-custom">
+            {/* Configuración de Venta */}
+            <fieldset className="bg-white border-2 border-slate-200 rounded-2xl p-5">
+              <legend className="text-xs font-black text-slate-900 uppercase tracking-wider px-2 bg-white">
+                Configuración de Venta
+              </legend>
+              <div className={`grid gap-4 ${tipDoc === 'APARTADO' ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">Tipo de Documento</label>
+                  <select
+                    value={tipDoc}
+                    onChange={e => { const v = e.target.value; setTipDoc(v); setEsPrest(v !== 'FACTURA'); if (v !== 'APARTADO') setAbono(''); }}
+                    className="w-full border-2 border-slate-200 rounded-lg px-3 h-11 text-sm outline-none focus:border-[#4488ee] focus:ring-2 focus:ring-[#4488ee]/20 transition-all bg-slate-50 font-semibold"
+                  >
+                    <option value="FACTURA">📄 Factura de Venta</option>
+                    <option value="PRESTAMO">🤝 Préstamo (Fiado)</option>
+                    <option value="APARTADO">🏷️ Apartado (Separar)</option>
+                  </select>
+                </div>
+                {tipDoc === 'APARTADO' && (
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">
+                      Abono Inicial <span className="text-rose-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="$0"
+                      value={abono}
+                      onChange={e => {
+                        const raw = parseFormattedNumber(e.target.value);
+                        setAbono(isNaN(raw) || raw === 0 ? '' : formatNumber(raw));
+                      }}
+                      className="w-full border-2 border-slate-200 rounded-lg px-3 h-11 text-sm outline-none focus:border-[#4488ee] focus:ring-2 focus:ring-[#4488ee]/20 transition-all tabular-nums font-semibold"
+                    />
+                  </div>
+                )}
+              </div>
+              {esPrest && (
+                <div className="mt-3">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">Observaciones</label>
+                  <textarea
+                    placeholder="Notas adicionales… (Opcional)"
+                    value={obs}
+                    onChange={e => setObs(e.target.value)}
+                    className="w-full border-2 border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#4488ee] focus:ring-2 focus:ring-[#4488ee]/20 transition-all resize-none h-16"
+                  />
+                </div>
+              )}
+            </fieldset>
+
+            {/* Información del Cliente */}
+            <fieldset className="bg-white border-2 border-slate-200 rounded-2xl p-5">
+              <legend className="text-xs font-black text-slate-900 uppercase tracking-wider px-2 bg-white">
+                Información del Cliente
+              </legend>
+              <div className="grid grid-cols-1 md:grid-cols-[1.2fr_1fr] gap-4 mb-3">
+                <div className="relative">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">Nombre / Razón Social</label>
+                  <input
+                    type="text"
+                    value={cliente.nombreCliente}
+                    onChange={onNombreCli}
+                    placeholder="Nombre completo…"
+                    autoComplete="off"
+                    className="w-full border-2 border-slate-200 rounded-lg px-3 h-11 text-sm outline-none focus:border-[#4488ee] focus:ring-2 focus:ring-[#4488ee]/20 transition-all font-semibold"
+                  />
+                  {showCli && (
+                    <div className="absolute top-full left-0 right-0 z-[100] bg-white border border-slate-200 rounded-xl mt-1 shadow-xl overflow-hidden max-h-52 overflow-y-auto">
+                      {sugCli.map((c, i) => (
+                        <div
+                          key={i}
+                          onMouseDown={() => pickCli(c)}
+                          className="p-3 cursor-pointer border-b border-slate-100 last:border-0 hover:bg-[#4488ee]/5 transition-colors"
+                        >
+                          <div className="font-bold text-sm text-slate-800">{c.nombre.toUpperCase()}</div>
+                          <div className="text-xs text-slate-500">NIT/CC: {c.identificacion}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">Cédula / NIT</label>
+                  <input
+                    type="number"
+                    value={cliente.cedulaNit}
+                    onChange={e => setCliente(p => ({ ...p, cedulaNit: e.target.value }))}
+                    autoComplete="off"
+                    className="w-full border-2 border-slate-200 rounded-lg px-3 h-11 text-sm outline-none focus:border-[#4488ee] focus:ring-2 focus:ring-[#4488ee]/20 transition-all font-semibold tabular-nums"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">Teléfono</label>
+                  <input
+                    type="text"
+                    placeholder="Ej: 310… (Opcional)"
+                    value={cliente.telefonoCliente}
+                    onChange={e => setCliente(p => ({ ...p, telefonoCliente: e.target.value }))}
+                    autoComplete="off"
+                    className="w-full border-2 border-slate-200 rounded-lg px-3 h-11 text-sm outline-none focus:border-[#4488ee] focus:ring-2 focus:ring-[#4488ee]/20 transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">Dirección</label>
+                  <input
+                    type="text"
+                    placeholder="Calle, Barrio… (Opcional)"
+                    value={cliente.direccionCliente}
+                    onChange={e => setCliente(p => ({ ...p, direccionCliente: e.target.value }))}
+                    autoComplete="off"
+                    className="w-full border-2 border-slate-200 rounded-lg px-3 h-11 text-sm outline-none focus:border-[#4488ee] focus:ring-2 focus:ring-[#4488ee]/20 transition-all"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">Correo Electrónico</label>
+                <input
+                  type="email"
+                  placeholder="cliente@ejemplo.com (Opcional)"
+                  value={cliente.correoCliente}
+                  onChange={e => setCliente(p => ({ ...p, correoCliente: e.target.value }))}
+                  autoComplete="off"
+                  className="w-full border-2 border-slate-200 rounded-lg px-3 h-11 text-sm outline-none focus:border-[#4488ee] focus:ring-2 focus:ring-[#4488ee]/20 transition-all"
+                />
+              </div>
+            </fieldset>
+
+            {/* Agregar Producto */}
+            <fieldset className="bg-white border-2 border-slate-200 rounded-2xl p-5">
+              <legend className="text-xs font-black text-slate-900 uppercase tracking-wider px-2 bg-white">
+                Agregar Producto
+              </legend>
+              <div className="grid grid-cols-1 md:grid-cols-[1fr_140px] gap-3 mb-3">
+                <div className="relative">
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">Buscador de Productos</label>
+                  <div className="relative">
+                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                    <input
+                      type="text"
+                      placeholder="Nombre o código…"
+                      value={prod.nombre}
+                      onChange={onNombreProd}
+                      autoComplete="off"
+                      className="w-full pl-9 pr-3 h-11 border-2 border-slate-200 rounded-lg text-sm outline-none focus:border-[#4488ee] focus:ring-2 focus:ring-[#4488ee]/20 transition-all"
+                    />
+                  </div>
+                  {showProd && (
+                    <div className="absolute top-full left-0 right-0 z-[100] bg-white border border-slate-200 rounded-xl mt-1 shadow-xl overflow-hidden max-h-52 overflow-y-auto">
+                      {sugProd.map((p, i) => (
+                        <div
+                          key={i}
+                          onMouseDown={() => pickProd(p)}
+                          className="p-3 cursor-pointer border-b border-slate-100 last:border-0 hover:bg-[#4488ee]/5 transition-colors"
+                        >
+                          <div className="font-bold text-sm text-slate-800">{p.nombre.toUpperCase()}</div>
+                          <div className="text-xs text-emerald-600 font-semibold">
+                            Precio: ${formatNumber(p.precioVendido)} · Stock: {p.cantidad}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">Costo</label>
+                  <div className="h-11 flex items-center justify-between bg-slate-50 border-2 border-dotted border-slate-300 rounded-lg px-3">
+                    <span className={`text-sm font-bold tabular-nums transition-all ${verCosto ? '' : 'blur-sm select-none'}`}>
+                      {prodSel && verCosto ? `$${prod.pc}` : '$ *****'}
+                    </span>
+                    <button
+                      onClick={() => setVerCosto(!verCosto)}
+                      className="text-[#4488ee] hover:text-[#3672c9] transition-colors"
+                    >
+                      {verCosto ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-[1fr_0.6fr_0.6fr] gap-3 mb-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">Precio Venta</label>
+                  <input
+                    type="text"
+                    value={prod.precio}
+                    onChange={e => setProd(p => ({ ...p, precio: e.target.value }))}
+                    autoComplete="off"
+                    className="w-full border-2 border-slate-200 rounded-lg px-3 h-11 text-sm outline-none focus:border-[#4488ee] focus:ring-2 focus:ring-[#4488ee]/20 transition-all tabular-nums font-semibold"
+                  />
+                  <label className="flex items-center gap-1.5 mt-1.5 cursor-pointer text-xs font-semibold text-slate-700">
+                    <input type="checkbox" checked={mayoreo} onChange={e => onMayoreo(e.target.checked)} className="accent-[#4488ee]" />
+                    Aplicar Mayoreo
+                  </label>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">Cantidad</label>
+                  <input
+                    type="number"
+                    value={prod.cantidad}
+                    onChange={e => setProd(p => ({ ...p, cantidad: e.target.value }))}
+                    className="w-full border-2 border-slate-200 rounded-lg px-3 h-11 text-sm outline-none focus:border-[#4488ee] focus:ring-2 focus:ring-[#4488ee]/20 transition-all tabular-nums text-center"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">Garantía</label>
+                  <input
+                    type="number"
+                    value={prod.garantia}
+                    onChange={e => setProd(p => ({ ...p, garantia: e.target.value }))}
+                    className="w-full border-2 border-slate-200 rounded-lg px-3 h-11 text-sm outline-none focus:border-[#4488ee] focus:ring-2 focus:ring-[#4488ee]/20 transition-all tabular-nums text-center"
+                  />
+                </div>
+              </div>
+              <div className="mb-3">
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">Descripción</label>
+                <textarea
+                  placeholder="Detalles adicionales, estado del producto, etc. (Opcional)"
+                  value={prod.descripcion}
+                  onChange={e => setProd(p => ({ ...p, descripcion: e.target.value }))}
+                  className="w-full border-2 border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#4488ee] focus:ring-2 focus:ring-[#4488ee]/20 transition-all resize-none h-14"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={agregar}
+                  className="flex-1 inline-flex items-center justify-center gap-2 h-12 bg-[#4488ee] hover:bg-[#3672c9] text-white rounded-lg text-sm font-black uppercase tracking-wider transition-colors shadow-sm shadow-[#4488ee]/20"
+                >
+                  <Plus size={18} /> Añadir a la Lista
+                </button>
+                <button
+                  onClick={clearFields}
+                  className="inline-flex items-center justify-center gap-2 h-12 px-5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg text-sm font-bold uppercase tracking-wider transition-colors"
+                  title="Limpiar campos"
+                >
+                  <Eraser size={16} /> Limpiar
+                </button>
+              </div>
+            </fieldset>
+          </div>
+
+          {/* ── RIGHT COLUMN: CART AS INVOICE ── */}
+          <div className="h-full">
+            <div className="invoice-paper h-full flex flex-col">
+
+              {/* Invoice Header */}
+              <div className="invoice-header shrink-0">
+                <div className="invoice-brand">ZENTORY<span>.</span></div>
+                <div className="invoice-sub">Sistema de Gestión & Ventas</div>
+                <div className="stamp">
+                  {tipDoc}<br />PENDIENTE
+                </div>
+              </div>
+
+              {/* Client Info */}
+              <div className="invoice-client-box shrink-0">
+                <div>
+                  <div className="text-[0.65rem] font-black text-slate-500 mb-1">CLIENTE</div>
+                  <div className="font-black truncate">{cliente.nombreCliente || 'CONSUMIDOR FINAL'}</div>
+                </div>
+                <div>
+                  <div className="text-[0.65rem] font-black text-slate-500 mb-1">NIT / CC</div>
+                  <div className="font-black truncate">{cliente.cedulaNit || '-------'}</div>
+                </div>
+              </div>
+
+              {/* Items Table (Scrollable, fills available space) */}
+              <div className="scroll-custom flex-1 overflow-y-auto px-8 min-h-0">
+                <table className="invoice-table">
+                  <thead className="sticky top-0 z-[1]">
+                    <tr>
+                      <th style={{ width: '50px' }}>CANT</th>
+                      <th>DESCRIPCIÓN</th>
+                      <th style={{ width: '70px', textAlign: 'center' }}>% DESC</th>
+                      <th style={{ width: '100px', textAlign: 'right' }}>UNITARIO</th>
+                      <th style={{ width: '100px', textAlign: 'right' }}>TOTAL</th>
+                      <th style={{ width: '70px', textAlign: 'center' }}>ACC</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {carrito.length === 0 ? (
+                      <tr>
+                        <td colSpan="6" className="text-center py-20 text-slate-400 italic">
+                          Esperando productos…
+                        </td>
+                      </tr>
+                    ) : (
+                      carrito.map((item, idx) => (
+                        <tr key={idx} className="item-row">
+                          <td style={{ textAlign: 'center' }}>{item.cantidad}</td>
+                          <td>
+                            <div className="font-black">{item.nombre.toUpperCase()}</div>
+                            <div className="text-[0.7rem] text-slate-500 font-medium">{item.descripcion || 'Sin especificar'}</div>
+                            <div className="text-[0.75rem] mt-1">
+                              <span className="bg-slate-100 px-1.5 py-0.5 rounded font-black">Garantía: {item.garantia}m</span>
+                            </div>
+                          </td>
+                          <td style={{ textAlign: 'center' }}>
+                            <div className="flex items-center justify-center gap-0.5">
+                              <input
+                                type="number"
+                                min="0"
+                                value={item.descuento || 0}
+                                onChange={(e) => {
+                                  const pct = Math.max(0, parseFloat(e.target.value) || 0);
+                                  setCarrito(prev => prev.map((it, i) => {
+                                    if (i !== idx) return it;
+                                    const pr = it.precioOriginal * (1 - pct / 100);
+                                    return { ...it, descuento: pct, precioUnitario: pr, total: pr * it.cantidad };
+                                  }));
+                                }}
+                                className="cart-input-mini w-10 h-6 text-[0.75rem] px-1"
+                              />
+                              <span className="text-[0.75rem] font-black text-slate-500">%</span>
+                            </div>
+                          </td>
+                          <td style={{ textAlign: 'right' }}>
+                            {item.descuento > 0 ? (
+                              <>
+                                <div className="text-[0.7rem] line-through text-slate-400">${item.precioOriginal.toLocaleString()}</div>
+                                <div className="text-rose-600">${item.precioUnitario.toLocaleString()}</div>
+                              </>
+                            ) : (
+                              `$${item.precioUnitario.toLocaleString()}`
+                            )}
+                          </td>
+                          <td style={{ textAlign: 'right' }} className="font-black">
+                            ${Math.round(item.total).toLocaleString()}
+                          </td>
+                          <td>
+                            <div className="flex gap-1 justify-center">
+                              <button
+                                onClick={() => editar(idx)}
+                                className="w-7 h-7 flex items-center justify-center rounded-md bg-slate-50 text-[#4488ee] border border-slate-200 hover:bg-[#4488ee]/10 transition-colors"
+                                title="Editar"
+                              >
+                                <Edit size={12} />
+                              </button>
+                              <button
+                                onClick={() => eliminar(idx)}
+                                className="w-7 h-7 flex items-center justify-center rounded-md bg-rose-50 text-rose-600 border border-rose-100 hover:bg-rose-100 transition-colors"
+                                title="Eliminar"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Invoice Footer (Fixed at Bottom) */}
+              <div className="invoice-total-section shrink-0">
+                <div className="flex justify-between items-center mb-2">
+                  {ahorroTotal > 0 ? (
+                    <div className="text-[0.7rem] font-black text-emerald-600 flex items-center gap-1.5">
+                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                      AHORRAS: ${Math.round(ahorroTotal).toLocaleString('es-CO')}
+                    </div>
+                  ) : <div></div>}
+
+                  {ahorroTotal > 0 && (
+                    <div className="text-xs font-black text-slate-400 line-through">
+                      NORMAL: ${Math.round(totalSinDesc).toLocaleString('es-CO')}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex justify-between items-end gap-3 flex-wrap">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Tag size={16} className="text-slate-500" />
+                    <div className="relative flex items-center">
+                      <input
+                        type="number"
+                        value={descGen === '' ? 0 : descGen}
+                        placeholder="0"
+                        onChange={e => setDescGen(e.target.value)}
+                        className="cart-input-mini w-16 h-8 text-sm pr-5"
+                      />
+                      <span className="absolute right-2 text-xs font-black text-slate-400">%</span>
+                    </div>
+                    <button
+                      onClick={applyDescGen}
+                      className="bg-slate-900 hover:bg-slate-800 text-white px-3 h-8 rounded text-[0.7rem] font-black tracking-wider transition-colors"
+                    >
+                      APLICAR
+                    </button>
+                    {(parseFloat(descGen) > 0 || ahorroTotal > 0) && (
+                      <button
+                        onClick={removeDescGen}
+                        className="bg-slate-100 hover:bg-slate-200 text-slate-600 px-3 h-8 rounded text-[0.7rem] font-black tracking-wider transition-colors"
+                      >
+                        LIMPIAR
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="text-right">
+                    <div className="text-[0.65rem] font-black text-slate-500 uppercase">Total a Pagar</div>
+                    <div
+                      className="text-4xl font-black leading-none tabular-nums tracking-tight"
+                      style={{ color: ahorroTotal > 0 ? '#10b981' : '#0f172a' }}
+                    >
+                      ${Math.round(totalCarrito).toLocaleString('es-CO')}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] gap-2">
+                  {!esPrest ? (
+                    <>
+                      <button
+                        onClick={imprimirPOS}
+                        className="inline-flex items-center justify-center gap-2 h-12 bg-slate-900 hover:bg-slate-800 text-white rounded text-sm font-black uppercase tracking-wider transition-colors"
+                      >
+                        <Printer size={16} /> Ticket POS
+                      </button>
+                      <button
+                        onClick={guardarPDF}
+                        className="inline-flex items-center justify-center gap-2 h-12 bg-white border-2 border-slate-900 text-slate-900 hover:bg-slate-50 rounded text-sm font-black uppercase tracking-wider transition-colors"
+                      >
+                        <FileText size={16} /> Factura PDF
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={imprimirPOSPrest}
+                        className="inline-flex items-center justify-center gap-2 h-12 bg-amber-500 hover:bg-amber-600 text-white rounded text-sm font-black uppercase tracking-wider transition-colors"
+                      >
+                        <Printer size={16} /> Imprimir {tipDoc}
+                      </button>
+                      <button
+                        onClick={guardarPDFPrest}
+                        className="inline-flex items-center justify-center gap-2 h-12 bg-white border-2 border-amber-500 text-amber-600 hover:bg-amber-50 rounded text-sm font-black uppercase tracking-wider transition-colors"
+                      >
+                        <FileText size={16} /> Factura PDF
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </main>
+
+      <ConfirmModal
+        open={!!confirm}
+        mensaje={confirm?.mensaje || ''}
+        textoAceptar="PROCESAR"
+        textoCancelar="VOLVER"
+        onAceptar={confirm?.onAceptar}
+        onCancelar={() => setConfirm(null)}
+      />
+
+      {/* Paper-invoice styles (kept as-is, height now fills flex column) */}
       <style>{`
-        .factura-input:focus { border-color: #3b82f6; }
-        .action-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border-radius: 8px; font-weight: 700; cursor: pointer; transition: all 0.2s; border: none; font-size: 0.85em; text-transform: uppercase; }
-        .action-btn:hover { filter: brightness(0.9); transform: translateY(-1px); }
         .scroll-custom::-webkit-scrollbar { width: 4px; }
         .scroll-custom::-webkit-scrollbar-track { background: transparent; }
         .scroll-custom::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-        
-        /* --- ESTILOS FACTURA DE PAPEL --- */
+
         .invoice-paper {
           background: #fff;
-          background-image: 
+          background-image:
             linear-gradient(#f1f5f9 1px, transparent 1px),
             linear-gradient(90deg, #f1f5f9 1px, transparent 1px);
           background-size: 20px 20px;
           position: relative;
-          box-shadow: 0 20px 50px rgba(0,0,0,0.1);
+          box-shadow: 0 20px 50px rgba(0,0,0,0.08);
           border-radius: 2px;
-          display: flex;
-          flex-direction: column;
-          font-family: 'Inter', sans-serif;
           border: 1px solid #e2e8f0;
-          transition: all 0.3s ease;
-          height: 935px; /* Perfect alignment with the left column action button */
+          min-height: 0;
         }
-        
-        /* Zigzag edge */
         .invoice-paper::before {
           content: "";
           position: absolute;
@@ -316,81 +748,71 @@ export default function Facturacion() {
           background-repeat: repeat-x;
           background-size: 10px 10px;
         }
-
         .invoice-header {
-          padding: 40px 30px 20px 30px;
+          padding: 32px 32px 12px 32px;
           text-align: center;
           position: relative;
         }
-        
         .invoice-brand {
-          font-size: 2.2em;
+          font-size: 2em;
           font-weight: 900;
           color: #0f172a;
           letter-spacing: -2px;
           line-height: 1;
-          margin-bottom: 5px;
+          margin-bottom: 4px;
         }
-        
-        .invoice-brand span { color: #3b82f6; }
-
+        .invoice-brand span { color: #4488ee; }
         .invoice-sub {
-          font-size: 0.75em;
+          font-size: 0.7em;
           color: #64748b;
           text-transform: uppercase;
           letter-spacing: 3px;
           font-weight: 800;
         }
-
         .invoice-client-box {
-          margin: 20px 30px;
-          padding: 15px;
+          margin: 12px 32px 16px 32px;
+          padding: 12px 14px;
           border: 2px solid #0f172a;
           display: grid;
           grid-template-columns: 1fr 1fr;
-          gap: 15px;
-          font-size: 0.8em;
+          gap: 14px;
+          font-size: 0.78em;
           text-transform: uppercase;
         }
-
         .invoice-table {
           width: 100%;
           border-collapse: collapse;
         }
-
         .invoice-table th {
           background: #0f172a;
           color: #fff;
-          padding: 12px 10px;
+          padding: 10px 8px;
           text-align: left;
-          font-size: 0.7em;
+          font-size: 0.65em;
           font-weight: 800;
           text-transform: uppercase;
         }
-
         .invoice-table td {
-          padding: 15px 10px;
-          font-size: 0.85em;
+          padding: 10px 8px;
+          font-size: 0.82em;
           border-bottom: 1px solid #e2e8f0;
           color: #1e293b;
           font-weight: 600;
+          vertical-align: middle;
         }
-
         .item-row:nth-child(even) { background: #f8fafc; }
-        .item-row:hover { background: rgba(59, 130, 246, 0.03); }
-
+        .item-row:hover { background: rgba(68, 136, 238, 0.04); }
         .invoice-total-section {
-          margin-top: auto;
-          padding: 15px 30px 30px 30px;
+          padding: 14px 32px 24px 32px;
           border-top: 2px dashed #0f172a;
+          background: #fff;
         }
-
         .stamp {
           position: absolute;
-          top: 40px;
-          right: 30px;
-          width: 100px;
-          height: 100px;
+          top: 24px;
+          right: 24px;
+          width: 90px;
+          height: 90px;
           border: 4px double #ef4444;
           border-radius: 50%;
           display: flex;
@@ -398,364 +820,29 @@ export default function Facturacion() {
           justify-content: center;
           color: #ef4444;
           font-weight: 900;
-          font-size: 0.8em;
+          font-size: 0.75em;
           transform: rotate(-15deg);
-          opacity: 0.6;
+          opacity: 0.55;
           text-transform: uppercase;
           text-align: center;
-          padding: 10px;
+          padding: 8px;
           pointer-events: none;
         }
-
-        .cart-input-mini { border: 1px solid #94a3b8; border-radius: 6px; padding: 4px 8px; width: 55px; font-size: 0.9em; text-align: center; background: #ffffff; font-weight: 800; color: #1e293b; outline: none; transition: all 0.2s; }
-        .cart-input-mini:focus { border-color: #000000; box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.05); }
-        
-        ::placeholder { color: #94a3b8; opacity: 1; font-weight: 400; }
-        ::-ms-input-placeholder { color: #94a3b8; }
-        
-        .btn-icon-sm { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 8px; cursor: pointer; border: none; transition: 0.2s; }
+        .cart-input-mini {
+          border: 1px solid #94a3b8;
+          border-radius: 6px;
+          text-align: center;
+          background: #fff;
+          font-weight: 800;
+          color: #1e293b;
+          outline: none;
+          transition: all 0.2s;
+        }
+        .cart-input-mini:focus {
+          border-color: #4488ee;
+          box-shadow: 0 0 0 2px rgba(68, 136, 238, 0.15);
+        }
       `}</style>
-
-      <div style={{ paddingTop: '55px', width: '96%', maxWidth: '1600px', margin: '0 auto', display: 'flex', flexDirection: 'column' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '40px', alignItems: 'stretch', padding: '20px 0' }}>
-          
-          {/* ── LEFT COLUMN: ENTRY ── */}
-          <div style={{ display: 'flex', flexDirection: 'column', height: '935px' }}>
-            <h1 style={{ fontSize: '1.6em', fontWeight: '800', color: '#0f172a', margin: '15px 0 0 0', height: '40px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-              {titulo}
-            </h1>
-
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '20px', marginTop: '20px' }}>
-              <fieldset style={fsSt({ marginBottom: 0, padding: '20px' })}>
-                <legend style={lgSt}>Configuración de Venta</legend>
-                <div style={{ display: 'grid', gridTemplateColumns: tipDoc === 'APARTADO' ? '1fr 1fr' : '1fr', gap: '20px' }}>
-                  <div>
-                    <label style={lSt}>Tipo de Documento</label>
-                    <select style={{ ...iSt, background: '#f8fafc' }} value={tipDoc} onChange={e => { const v = e.target.value; setTipDoc(v); setEsPrest(v !== 'FACTURA'); if (v !== 'APARTADO') setAbono(''); }}>
-                      <option value="FACTURA">📄 Factura de Venta</option>
-                      <option value="PRESTAMO">🤝 Préstamo (Fiado)</option>
-                      <option value="APARTADO">🏷️ Apartado (Separar)</option>
-                    </select>
-                  </div>
-                  {tipDoc === 'APARTADO' && (
-                    <div>
-                      <label style={lSt}>
-                        Abono Inicial <span style={{ color: '#ef4444' }}>*</span>
-                      </label>
-                      <input
-                        type="text"
-                        style={iSt}
-                        className="factura-input"
-                        placeholder="$0"
-                        value={abono}
-                        onChange={e => {
-                          const raw = parseFormattedNumber(e.target.value);
-                          setAbono(isNaN(raw) || raw === 0 ? '' : formatNumber(raw));
-                        }}
-                      />
-                    </div>
-                  )}
-                </div>
-                {esPrest && (
-                  <div style={{ marginTop: '15px' }}>
-                    <label style={lSt}>Observaciones</label>
-                    <textarea
-                      style={{ ...iSt, resize: 'none', height: '60px' }}
-                      className="factura-input"
-                      placeholder="Notas adicionales... (Opcional)"
-                      value={obs}
-                      onChange={e => setObs(e.target.value)}
-                    />
-                  </div>
-                )}
-              </fieldset>
-
-              <fieldset style={fsSt({ marginBottom: 0, padding: '20px' })}>
-                <legend style={lgSt}>Información del Cliente</legend>
-                <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '20px', marginBottom: '15px' }}>
-                  <div style={{ position: 'relative' }}>
-                    <label style={lSt}>Nombre / Razón Social</label>
-                    <input type="text" style={iSt} className="factura-input" value={cliente.nombreCliente} onChange={onNombreCli} placeholder="Nombre completo..." />
-                    {showCli && (
-                      <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100, background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', marginTop: '5px', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', overflow: 'hidden', maxHeight: '200px', overflowY: 'auto' }}>
-                        {sugCli.map((c, i) => (
-                          <div key={i} onMouseDown={() => pickCli(c)} className="sugerencia-item" style={{ padding: '12px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }}>
-                            <div style={{ fontWeight: '700', fontSize: '0.9em' }}>{c.nombre.toUpperCase()}</div>
-                            <div style={{ fontSize: '0.8em', color: '#64748b' }}>NIT/CC: {c.identificacion}</div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <label style={lSt}>Cédula / NIT</label>
-                    <input type="number" style={iSt} className="factura-input" value={cliente.cedulaNit} onChange={e => setCliente(p => ({ ...p, cedulaNit: e.target.value }))} />
-                  </div>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '15px' }}>
-                  <div>
-                    <label style={lSt}>Teléfono</label>
-                    <input type="text" style={iSt} className="factura-input" placeholder="Ej: 310... (Opcional)" value={cliente.telefonoCliente} onChange={e => setCliente(p => ({ ...p, telefonoCliente: e.target.value }))} />
-                  </div>
-                  <div>
-                    <label style={lSt}>Dirección</label>
-                    <input type="text" style={iSt} className="factura-input" placeholder="Calle, Barrio... (Opcional)" value={cliente.direccionCliente} onChange={e => setCliente(p => ({ ...p, direccionCliente: e.target.value }))} />
-                  </div>
-                </div>
-                <div>
-                  <label style={lSt}>Correo Electrónico</label>
-                  <input type="email" style={iSt} className="factura-input" placeholder="cliente@ejemplo.com (Opcional)" value={cliente.correoCliente} onChange={e => setCliente(p => ({ ...p, correoCliente: e.target.value }))} />
-                </div>
-              </fieldset>
-
-              <fieldset style={fsSt({ marginBottom: 0, padding: '20px', flex: 1, display: 'flex', flexDirection: 'column' })}>
-                <legend style={lgSt}>Agregar Producto</legend>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px', gap: '15px', marginBottom: '15px', alignItems: 'flex-end' }}>
-                    <div style={{ position: 'relative' }}>
-                      <label style={lSt}>Buscador de Productos</label>
-                      <div style={{ position: 'relative' }}>
-                        <Search size={18} style={{ position: 'absolute', left: '15px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
-                        <input type="text" style={{ ...iSt, paddingLeft: '45px' }} className="factura-input" placeholder="Nombre o código..." value={prod.nombre} onChange={onNombreProd} />
-                      </div>
-                      {showProd && (
-                        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100, background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', marginTop: '5px', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', overflow: 'hidden', maxHeight: '200px', overflowY: 'auto' }}>
-                          {sugProd.map((p, i) => (
-                            <div key={i} onMouseDown={() => pickProd(p)} className="sugerencia-item" style={{ padding: '12px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }}>
-                              <div style={{ fontWeight: '700' }}>{p.nombre.toUpperCase()}</div>
-                              <div style={{ fontSize: '0.85em', color: '#10b981', fontWeight: '600' }}>Precio: ${formatNumber(p.precioVendido)} | Stock: {p.cantidad}</div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                    <div>
-                      <label style={lSt}>Costo</label>
-                      <div style={{ ...iSt, height: '42px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8fafc', borderStyle: 'dotted', padding: '0 10px' }}>
-                        <span style={{ fontSize: '0.9em', fontWeight: '800', filter: verCosto ? 'none' : 'blur(4px)', transition: '0.3s' }}>
-                          {prodSel && verCosto ? `$${prod.pc}` : '$ *****'}
-                        </span>
-                        <button onClick={() => setVerCosto(!verCosto)} style={{ border: 'none', background: 'none', color: '#3b82f6', cursor: 'pointer', padding: 0 }}>
-                          {verCosto ? <ShoppingBag size={14} /> : <Search size={14} />}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 0.6fr 0.6fr', gap: '15px', marginBottom: '15px' }}>
-                    <div>
-                      <label style={lSt}>Precio Venta</label>
-                      <input type="text" style={iSt} className="factura-input" value={prod.precio} onChange={e => setProd(p => ({ ...p, precio: e.target.value }))} />
-                      <label style={{ ...lSt, marginTop: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8em' }}>
-                        <input type="checkbox" checked={mayoreo} onChange={e => onMayoreo(e.target.checked)} /> Aplicar Mayoreo
-                      </label>
-                    </div>
-                    <div>
-                      <label style={lSt}>Cantidad</label>
-                      <input type="number" style={iSt} className="factura-input" value={prod.cantidad} onChange={e => setProd(p => ({ ...p, cantidad: e.target.value }))} />
-                    </div>
-                    <div>
-                      <label style={lSt}>Garantía</label>
-                      <input type="number" style={iSt} className="factura-input" value={prod.garantia} onChange={e => setProd(p => ({ ...p, garantia: e.target.value }))} />
-                    </div>
-                  </div>
-                  <div style={{ marginBottom: '15px' }}>
-                    <label style={lSt}>Descripción del Producto</label>
-                    <textarea style={{ ...iSt, resize: 'none', height: '60px' }} className="factura-input" placeholder="Detalles adicionales, estado del producto, etc. (Opcional)" value={prod.descripcion} onChange={e => setProd(p => ({ ...p, descripcion: e.target.value }))} />
-                  </div>
-                </div>
-                <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-                  <button onClick={agregar} className="action-btn" style={{ flex: 1, background: '#3b82f6', color: '#fff', height: '48px', fontSize: '0.9em' }}>
-                    <Plus size={18} /> AÑADIR A LA LISTA
-                  </button>
-                  <button onClick={clearFields} className="action-btn" style={{ width: '120px', background: '#f1f5f9', color: '#64748b', height: '48px', gap: '8px' }} title="Limpiar campos">
-                    <Eraser size={18} /> LIMPIAR
-                  </button>
-                </div>
-              </fieldset>
-            </div>
-          </div>
-
-          {/* ── RIGHT COLUMN: CART AS INVOICE ── */}
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <h2 style={{ fontSize: '1.6em', fontWeight: '800', color: 'transparent', margin: '15px 0 10px 0', userSelect: 'none' }}>.</h2>
-            <div className="invoice-paper">
-              
-              {/* Invoice Header (Fixed) */}
-              <div className="invoice-header">
-                <div className="invoice-brand">ZENTORY<span>.</span></div>
-                <div className="invoice-sub">Sistema de Gestión & Ventas</div>
-                <div className="stamp">
-                  {tipDoc}<br />PENDIENTE
-                </div>
-              </div>
-
-              {/* Client Info (Fixed) */}
-              <div className="invoice-client-box">
-                <div>
-                  <div style={{ fontWeight: '900', color: '#64748b', fontSize: '0.7em', marginBottom: '4px' }}>CLIENTE</div>
-                  <div style={{ fontWeight: '800' }}>{cliente.nombreCliente || 'CONSUMIDOR FINAL'}</div>
-                </div>
-                <div>
-                  <div style={{ fontWeight: '900', color: '#64748b', fontSize: '0.7em', marginBottom: '4px' }}>NIT / CC</div>
-                  <div style={{ fontWeight: '800' }}>{cliente.cedulaNit || '-------'}</div>
-                </div>
-              </div>
-
-              {/* Items Table (Scrollable Area) */}
-              <div className="scroll-custom" style={{ padding: '0 30px', flex: 1, overflowY: 'auto' }}>
-                <table className="invoice-table">
-                  <thead>
-                    <tr>
-                      <th style={{ width: '50px' }}>CANT</th>
-                      <th>DESCRIPCIÓN</th>
-                      <th style={{ width: '80px', textAlign: 'center' }}>% DESC</th>
-                      <th style={{ width: '100px', textAlign: 'right' }}>UNITARIO</th>
-                      <th style={{ width: '100px', textAlign: 'right' }}>TOTAL</th>
-                      <th style={{ width: '80px', textAlign: 'center' }}>ACC</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {carrito.length === 0 ? (
-                      <tr>
-                        <td colSpan="6" style={{ textAlign: 'center', padding: '100px 0', color: '#94a3b8', fontStyle: 'italic' }}>
-                          Esperando productos...
-                        </td>
-                      </tr>
-                    ) : (
-                      carrito.map((item, idx) => (
-                        <tr key={idx} className="item-row">
-                          <td style={{ textAlign: 'center' }}>{item.cantidad}</td>
-                          <td>
-                            <div style={{ fontWeight: '800' }}>{item.nombre.toUpperCase()}</div>
-                            <div style={{ fontSize: '0.75em', color: '#64748b', fontWeight: '500' }}>{item.descripcion || 'Sin especificar'}</div>
-                            <div style={{ fontSize: '0.7em', marginTop: '4px' }}>
-                              <span style={{ backgroundColor: '#f1f5f9', padding: '2px 6px', borderRadius: '4px', fontWeight: '800' }}>Gtz: {item.garantia}m</span>
-                            </div>
-                          </td>
-                          <td style={{ textAlign: 'center' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px' }}>
-                              <input type="number" className="cart-input-mini" 
-                                style={{ width: '40px', height: '24px', fontSize: '0.8em', border: '1px solid #cbd5e1', padding: '0 4px' }}
-                                min="0"
-                                value={item.descuento || 0}
-                                onChange={(e) => {
-                                  const pct = Math.max(0, parseFloat(e.target.value) || 0);
-                                  setCarrito(prev => prev.map((it, i) => {
-                                    if (i !== idx) return it;
-                                    const pr = it.precioOriginal * (1 - pct / 100);
-                                    return { ...it, descuento: pct, precioUnitario: pr, total: pr * it.cantidad };
-                                  }));
-                                }}
-                              />
-                              <span style={{ fontSize: '0.8em', fontWeight: '800', color: '#64748b' }}>%</span>
-                            </div>
-                          </td>
-                          <td style={{ textAlign: 'right' }}>
-                            {item.descuento > 0 ? (
-                              <>
-                                <div style={{ fontSize: '0.7em', textDecoration: 'line-through', color: '#94a3b8' }}>${item.precioOriginal.toLocaleString()}</div>
-                                <div style={{ color: '#ef4444' }}>${item.precioUnitario.toLocaleString()}</div>
-                              </>
-                            ) : (
-                              `$${item.precioUnitario.toLocaleString()}`
-                            )}
-                          </td>
-                          <td style={{ textAlign: 'right', fontWeight: '900' }}>
-                            ${Math.round(item.total).toLocaleString()}
-                          </td>
-                          <td>
-                            <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
-                              <button onClick={() => editar(idx)} className="btn-icon-sm" style={{ background: '#f8fafc', color: '#3b82f6', border: '1px solid #e2e8f0' }} title="Editar"><Edit size={14} /></button>
-                              <button onClick={() => eliminar(idx)} className="btn-icon-sm" style={{ background: '#fff1f2', color: '#ef4444', border: '1px solid #fee2e2' }} title="Eliminar"><Trash2 size={14} /></button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Invoice Footer (Fixed at Bottom) */}
-              <div className="invoice-total-section">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-                    {ahorroTotal > 0 ? (
-                      <div style={{ fontSize: '0.75em', fontWeight: '900', color: '#10b981', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                        <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981' }}></div>
-                        AHORRAS: ${Math.round(ahorroTotal).toLocaleString('es-CO')}
-                      </div>
-                    ) : <div></div>}
-                    
-                    {ahorroTotal > 0 && (
-                       <div style={{ fontSize: '0.8em', fontWeight: '800', color: '#94a3b8', textDecoration: 'line-through' }}>
-                         NORMAL: ${Math.round(totalSinDesc).toLocaleString('es-CO')}
-                       </div>
-                    )}
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <Tag size={16} color="#64748b" />
-                      <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                        <input type="number" className="cart-input-mini" value={descGen === '' ? 0 : descGen} placeholder="0" onChange={e => setDescGen(e.target.value)} style={{ width: '60px', height: '32px', fontSize: '0.9em', paddingRight: '20px' }} />
-                        <span style={{ position: 'absolute', right: '8px', fontSize: '0.8em', fontWeight: '800', color: '#94a3b8' }}>%</span>
-                      </div>
-                      <button onClick={applyDescGen} style={{ background: '#0f172a', color: '#fff', border: 'none', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.7em', fontWeight: '900' }}>APLICAR DESC.</button>
-                      {(parseFloat(descGen) > 0 || ahorroTotal > 0) && (
-                        <button onClick={removeDescGen} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', padding: '8px 15px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.7em', fontWeight: '900' }}>LIMPIAR</button>
-                      )}
-                    </div>
-                  </div>
-                  
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: '0.75em', fontWeight: '900', color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}>Total a Pagar</div>
-                    <div style={{ fontSize: '2.4em', fontWeight: '900', color: ahorroTotal > 0 ? '#10b981' : '#0f172a', letterSpacing: '-2px', lineHeight: 1 }}>
-                      ${totalCarrito.toLocaleString('es-CO')}
-                    </div>
-                  </div>
-                </div>
-
-                <div style={{ marginTop: '20px' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.2fr) minmax(0, 1fr) 50px', gap: '12px' }}>
-                    {!esPrest ? (
-                      <>
-                        <button onClick={imprimirPOS} className="action-btn" style={{ background: '#0f172a', color: '#fff', height: '48px', borderRadius: '4px' }}>
-                          <Printer size={18} /> TICKET POS
-                        </button>
-                        <button onClick={guardarPDF} className="action-btn" style={{ background: '#fff', border: '2px solid #0f172a', color: '#0f172a', height: '48px', borderRadius: '4px' }}>
-                          <FileText size={18} /> FACTURA PDF
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <button onClick={imprimirPOSPrest} className="action-btn" style={{ background: '#f59e0b', color: '#fff', height: '48px', borderRadius: '4px' }}>
-                          <Printer size={18} /> IMPRIMIR {tipDoc}
-                        </button>
-                        <button onClick={guardarPDFPrest} className="action-btn" style={{ background: '#fff', border: '2px solid #f59e0b', color: '#f59e0b', height: '48px', borderRadius: '4px' }}>
-                          <FileText size={18} /> FACTURA PDF
-                        </button>
-                      </>
-                    )}
-                    <button onClick={limpiarTodo} className="action-btn" style={{ background: '#f1f5f9', color: '#64748b', height: '48px', borderRadius: '4px', padding: 0 }}>
-                      <XCircle size={22} />
-                    </button>
-                  </div>
-                </div>
-                
-
-              </div>
-
-            </div>
-          </div>
-
-        </div>
-      </div>
-
-      <ConfirmModal open={!!confirm} mensaje={confirm?.mensaje || ''} textoAceptar="PROCESAR" textoCancelar="VOLVER"
-        onAceptar={confirm?.onAceptar} onCancelar={() => setConfirm(null)} />
-    </>
+    </div>
   );
 }

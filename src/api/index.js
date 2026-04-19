@@ -71,7 +71,10 @@ export const eliminarPedido = (id) => api.delete(`/pedido/${id}`);
 export const recibirPedido = (id) => api.put(`/pedido/${id}/recibir`);
 
 // ── Facturas ──────────────────────────────────────────────────────────────
-export const getFacturas = () => api.get('/api/facturas');
+export const getFacturas = (page = 0, size = 20) =>
+  api.get(`/api/facturas?page=${page}&size=${size}`);
+export const buscarFacturas = (query, page = 0, size = 20) =>
+  api.get(`/api/facturas/buscar?query=${encodeURIComponent(query)}&page=${page}&size=${size}`);
 export const getFactura = (id) => api.get(`/api/facturas/${id}`);
 export const getFacturaDetalles = (id) => api.get(`/api/facturas/${id}/detalles`);
 export const crearFactura = (data) => api.post('/api/facturas/crear', data);

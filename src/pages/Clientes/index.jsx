@@ -12,18 +12,18 @@ import {
 // ── Fila de tabla ───────────────────────────────────────────────────────────
 const FilaCliente = memo(function FilaCliente({ cliente, onEditar }) {
   return (
-    <tr className="even:bg-gray-50 hover:bg-blue-50/40 transition-colors">
-      <td className="border border-gray-300 px-3 py-2 text-center text-gray-500">{cliente.id}</td>
-      <td className="border border-gray-300 px-3 py-2 font-medium uppercase">{cliente.nombre}</td>
-      <td className="border border-gray-300 px-3 py-2">{cliente.identificacion || '—'}</td>
-      <td className="border border-gray-300 px-3 py-2">{cliente.telefono || '—'}</td>
-      <td className="border border-gray-300 px-3 py-2">{cliente.direccion || '—'}</td>
-      <td className="border border-gray-300 px-3 py-2">{cliente.correo || '—'}</td>
-      <td className="border border-gray-300 px-3 py-2 text-center">
+    <tr className="hover:bg-slate-50/70 transition-colors border-b border-slate-100 last:border-0">
+      <td className="px-4 py-3 text-center text-slate-400 text-xs font-mono">{cliente.id}</td>
+      <td className="px-4 py-3 font-semibold uppercase text-slate-800">{cliente.nombre}</td>
+      <td className="px-4 py-3 text-slate-600">{cliente.identificacion || <span className="text-slate-300">—</span>}</td>
+      <td className="px-4 py-3 text-slate-600">{cliente.telefono || <span className="text-slate-300">—</span>}</td>
+      <td className="px-4 py-3 text-slate-600 truncate">{cliente.direccion || <span className="text-slate-300">—</span>}</td>
+      <td className="px-4 py-3 text-slate-600 truncate">{cliente.correo || <span className="text-slate-300">—</span>}</td>
+      <td className="px-4 py-3 text-center">
         <button
           onClick={() => onEditar(cliente)}
           title="Editar cliente"
-          className="inline-flex items-center justify-center gap-1 bg-[#28a745] hover:bg-[#218838] text-white rounded px-2 py-1 text-xs transition-colors"
+          className="inline-flex items-center gap-1 bg-emerald-500 hover:bg-emerald-600 text-white rounded-md px-2.5 py-1.5 text-xs font-semibold transition-colors shadow-sm"
         >
           <Pencil size={12} /> Editar
         </button>
@@ -33,37 +33,36 @@ const FilaCliente = memo(function FilaCliente({ cliente, onEditar }) {
 });
 
 // ── Stat card ───────────────────────────────────────────────────────────────
-function Stat({ icon: Icon, title, value, bg, text }) {
+function Stat({ icon: Icon, title, value, accent }) {
   return (
-    <div className={`${bg} ${text} rounded-lg shadow-sm p-4 flex items-center gap-3`}>
-      <Icon size={32} className="opacity-80 shrink-0" />
-      <div className="min-w-0">
-        <p className="text-sm font-semibold m-0 opacity-90 truncate">{title}</p>
-        <p className="text-2xl font-bold m-0 mt-0.5 truncate">{value}</p>
+    <div className="bg-white rounded-xl border border-slate-200 p-5 flex items-center gap-4 shadow-sm hover:shadow-md transition-shadow">
+      <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${accent}`}>
+        <Icon size={24} />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide truncate">{title}</p>
+        <p className="text-2xl font-black text-slate-900 mt-0.5 truncate tabular-nums">{value}</p>
       </div>
     </div>
   );
 }
 
 // ── Modal base ──────────────────────────────────────────────────────────────
-function Modal({ show, onClose, title, wide = false, children, headerCls = 'bg-[#343a40]' }) {
+function Modal({ show, onClose, title, wide = false, children, headerCls = 'bg-slate-900' }) {
   if (!show) return null;
   return (
     <div
-      className="fixed inset-0 z-[1050] bg-black/50 flex items-start justify-center pt-16 overflow-y-auto"
+      className="fixed inset-0 z-[1050] bg-slate-900/60 backdrop-blur-sm flex items-start justify-center pt-20 overflow-y-auto"
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className={`bg-white rounded-md shadow-xl mb-8 max-w-[96vw] ${wide ? 'w-[720px]' : 'w-[520px]'}`}>
-        <div className={`flex items-center justify-between px-5 py-3 border-b border-gray-300 ${headerCls} text-white rounded-t-md`}>
-          <h5 className="m-0 text-base font-semibold">{title}</h5>
-          <button
-            onClick={onClose}
-            className="text-white/90 hover:text-white text-2xl leading-none"
-          >
+      <div className={`bg-white rounded-2xl shadow-2xl mb-8 max-w-[96vw] overflow-hidden ${wide ? 'w-[760px]' : 'w-[540px]'}`}>
+        <div className={`flex items-center justify-between px-6 py-4 border-b border-slate-200 ${headerCls} text-white`}>
+          <h5 className="m-0 text-base font-bold">{title}</h5>
+          <button onClick={onClose} className="text-white/70 hover:text-white transition-colors">
             <X size={20} />
           </button>
         </div>
-        <div className="px-5 py-4">{children}</div>
+        <div className="px-6 py-5">{children}</div>
       </div>
     </div>
   );
@@ -86,13 +85,11 @@ export default function Clientes() {
   const [top, setTop] = useState([]);
   const [loadingTop, setLoadingTop] = useState(false);
 
-  // ── Carga ─────────────────────────────────────────────────────────────────
   const cargarClientes = useCallback(async () => {
     setLoading(true);
     try {
       const { data } = await getClientes();
       const lista = Array.isArray(data) ? data : (data?.content ?? []);
-      // Mismo orden que el original: id desc (más recientes primero)
       lista.sort((a, b) => b.id - a.id);
       setClientes(lista);
     } catch {
@@ -104,7 +101,6 @@ export default function Clientes() {
 
   useEffect(() => { cargarClientes(); }, [cargarClientes]);
 
-  // ── Filtrado ──────────────────────────────────────────────────────────────
   const clientesFiltrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
     if (!q) return clientes;
@@ -114,7 +110,6 @@ export default function Clientes() {
     );
   }, [clientes, busqueda]);
 
-  // ── Form ──────────────────────────────────────────────────────────────────
   const abrirAgregar = () => {
     setEditingId(null);
     setForm(FORM_INICIAL);
@@ -147,7 +142,6 @@ export default function Clientes() {
       toast.error('El nombre es obligatorio.');
       return;
     }
-    // Campos vacíos → null para el backend (como en el original)
     const payload = {
       nombre: form.nombre.trim() || null,
       identificacion: form.identificacion.trim() || null,
@@ -178,7 +172,6 @@ export default function Clientes() {
     }
   };
 
-  // ── Top clientes ──────────────────────────────────────────────────────────
   const verTop = async () => {
     setShowTop(true);
     setLoadingTop(true);
@@ -192,121 +185,122 @@ export default function Clientes() {
     }
   };
 
-  // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="pt-[55px] min-h-screen bg-white">
-      <div className="w-[92%] max-w-[1500px] mx-auto px-4 py-5">
-        <h1 className="text-center text-2xl font-semibold select-none">Gestión de Clientes</h1>
-        <p className="text-center text-gray-500 mb-5">
-          Administra la base de datos de clientes del negocio
-        </p>
-
-        {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-5">
-          <Stat icon={Users} title="Clientes registrados" value={clientes.length}
-            bg="bg-[#007bff]" text="text-white" />
-          <Stat icon={Search} title="Coincidencias" value={clientesFiltrados.length}
-            bg="bg-[#17a2b8]" text="text-white" />
-        </div>
-
-        {/* Toolbar */}
-        <div className="flex flex-wrap items-center gap-2 mb-4">
-          <div className="flex-1 min-w-[240px] flex items-center border border-gray-300 rounded overflow-hidden focus-within:border-blue-400">
-            <span className="px-2 text-gray-500"><Search size={14} /></span>
-            <input
-              type="text"
-              value={busqueda}
-              onChange={(e) => setBusqueda(e.target.value.toUpperCase())}
-              placeholder="Buscar por nombre o identificación..."
-              className="flex-1 px-1 py-1.5 text-sm outline-none"
-            />
+    <div className="h-screen flex flex-col bg-slate-50 overflow-hidden">
+      {/* Page Header */}
+      <header className="shrink-0 bg-white border-b border-slate-200 px-8 py-5">
+        <div className="max-w-[1800px] mx-auto w-full flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            <h1 className="text-2xl font-black text-slate-900 tracking-tight">Clientes</h1>
+            <p className="text-sm text-slate-500 mt-0.5">Administra la base de datos de clientes del negocio</p>
           </div>
-          <button
-            onClick={() => cargarClientes()}
-            className="inline-flex items-center gap-1.5 border border-gray-300 hover:bg-gray-50 text-gray-700 rounded px-3 py-1.5 text-sm transition-colors"
-          >
-            <RefreshCw size={14} /> Actualizar
-          </button>
-          <button
-            onClick={verTop}
-            className="inline-flex items-center gap-1.5 bg-[#007bff] hover:bg-[#0069d9] text-white rounded px-3 py-1.5 text-sm transition-colors"
-          >
-            <Trophy size={14} /> Clientes Top
-          </button>
-          <button
-            onClick={abrirAgregar}
-            className="inline-flex items-center gap-1.5 bg-[#343a40] hover:bg-black text-white rounded px-3 py-1.5 text-sm transition-colors"
-          >
-            <Plus size={14} /> Agregar Cliente
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => cargarClientes()}
+              className="inline-flex items-center gap-1.5 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 rounded-lg px-3.5 h-9 text-sm font-semibold transition-colors"
+            >
+              <RefreshCw size={14} /> Actualizar
+            </button>
+            <button
+              onClick={verTop}
+              className="inline-flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg px-4 h-9 text-sm font-semibold transition-colors shadow-sm shadow-amber-500/20"
+            >
+              <Trophy size={14} /> Clientes Top
+            </button>
+            <button
+              onClick={abrirAgregar}
+              className="inline-flex items-center gap-1.5 bg-[#4488ee] hover:bg-[#3672c9] text-white rounded-lg px-4 h-9 text-sm font-semibold transition-colors shadow-sm shadow-[#4488ee]/20"
+            >
+              <Plus size={14} /> Agregar Cliente
+            </button>
+          </div>
         </div>
+      </header>
 
-        {/* Tabla */}
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr className="bg-gray-100">
-                <th className="border border-gray-300 px-3 py-2 text-center w-16">ID</th>
-                <th className="border border-gray-300 px-3 py-2 text-left">Nombre</th>
-                <th className="border border-gray-300 px-3 py-2 text-left w-32">Identificación</th>
-                <th className="border border-gray-300 px-3 py-2 text-left w-32">Teléfono</th>
-                <th className="border border-gray-300 px-3 py-2 text-left">Dirección</th>
-                <th className="border border-gray-300 px-3 py-2 text-left w-52">Correo</th>
-                <th className="border border-gray-300 px-3 py-2 text-center w-28">Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr>
-                  <td colSpan={7} className="border border-gray-300 text-center text-gray-500 py-6">
-                    Cargando clientes…
-                  </td>
-                </tr>
-              ) : clientesFiltrados.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="border border-gray-300 text-center text-gray-500 py-6">
-                    {busqueda ? 'Sin coincidencias para la búsqueda' : 'No hay clientes registrados'}
-                  </td>
-                </tr>
-              ) : (
-                clientesFiltrados.map((c) => (
-                  <FilaCliente
-                    key={c.id}
-                    cliente={c}
-                    onEditar={abrirEditar}
-                  />
-                ))
-              )}
-            </tbody>
-          </table>
+      {/* Content — no page scroll, only table scrolls internally */}
+      <main className="flex-1 min-h-0 px-8 py-6 overflow-hidden">
+        <div className="max-w-[1800px] mx-auto w-full h-full flex flex-col gap-4">
+          {/* Stats + search — fixed */}
+          <div className="shrink-0 grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Stat icon={Users} title="Clientes registrados" value={clientes.length}
+              accent="bg-blue-50 text-blue-600" />
+            <Stat icon={Search} title="Coincidencias" value={clientesFiltrados.length}
+              accent="bg-cyan-50 text-cyan-600" />
+          </div>
+
+          <div className="shrink-0">
+            <div className="relative max-w-md">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value.toUpperCase())}
+                placeholder="Buscar por nombre o identificación..."
+                className="w-full bg-white border border-slate-200 rounded-lg pl-10 pr-3 h-10 text-sm outline-none focus:border-[#4488ee] focus:ring-2 focus:ring-[#4488ee]/20 shadow-sm transition-all"
+              />
+            </div>
+          </div>
+
+          {/* Tabla — fills remaining space, scrolls internally */}
+          <div className="flex-1 min-h-0 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="h-full overflow-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr>
+                    <th className="sticky top-0 z-10 bg-slate-50 px-4 py-3 text-center font-semibold text-slate-600 uppercase tracking-wide text-xs w-16 border-b border-slate-200">ID</th>
+                    <th className="sticky top-0 z-10 bg-slate-50 px-4 py-3 text-left font-semibold text-slate-600 uppercase tracking-wide text-xs border-b border-slate-200">Nombre</th>
+                    <th className="sticky top-0 z-10 bg-slate-50 px-4 py-3 text-left font-semibold text-slate-600 uppercase tracking-wide text-xs w-36 border-b border-slate-200">Identificación</th>
+                    <th className="sticky top-0 z-10 bg-slate-50 px-4 py-3 text-left font-semibold text-slate-600 uppercase tracking-wide text-xs w-32 border-b border-slate-200">Teléfono</th>
+                    <th className="sticky top-0 z-10 bg-slate-50 px-4 py-3 text-left font-semibold text-slate-600 uppercase tracking-wide text-xs border-b border-slate-200">Dirección</th>
+                    <th className="sticky top-0 z-10 bg-slate-50 px-4 py-3 text-left font-semibold text-slate-600 uppercase tracking-wide text-xs w-52 border-b border-slate-200">Correo</th>
+                    <th className="sticky top-0 z-10 bg-slate-50 px-4 py-3 text-center font-semibold text-slate-600 uppercase tracking-wide text-xs w-28 border-b border-slate-200">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading ? (
+                    <tr><td colSpan={7} className="text-center text-slate-400 py-12">Cargando clientes…</td></tr>
+                  ) : clientesFiltrados.length === 0 ? (
+                    <tr><td colSpan={7} className="text-center text-slate-400 py-12">
+                      <Users size={32} className="mx-auto mb-2 text-slate-300" />
+                      {busqueda ? 'Sin coincidencias para la búsqueda' : 'No hay clientes registrados'}
+                    </td></tr>
+                  ) : (
+                    clientesFiltrados.map((c) => (
+                      <FilaCliente key={c.id} cliente={c} onEditar={abrirEditar} />
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
-      </div>
+      </main>
 
-      {/* Modal agregar/editar ──────────────────────────────────────────────── */}
+      {/* Modal agregar/editar */}
       <Modal
         show={showModal}
         onClose={cerrarModal}
         title={editingId ? 'Editar Cliente' : 'Agregar Cliente'}
       >
-        <form onSubmit={guardar} className="space-y-3">
+        <form onSubmit={guardar} className="space-y-4">
           <div>
-            <label className="block text-sm mb-1 font-medium inline-flex items-center gap-1">
-              <Users size={14} /> Nombre del cliente
+            <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 uppercase tracking-wide mb-1.5">
+              <Users size={12} /> Nombre del cliente
             </label>
             <input
               type="text"
               autoComplete="off"
               value={form.nombre}
               onChange={onChange('nombre')}
-              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm outline-none focus:border-blue-400"
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#4488ee] focus:ring-2 focus:ring-[#4488ee]/20 transition-all"
               required
               autoFocus
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm mb-1 font-medium inline-flex items-center gap-1">
-                <IdCard size={14} /> Cédula o NIT
+              <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 uppercase tracking-wide mb-1.5">
+                <IdCard size={12} /> Cédula / NIT
               </label>
               <input
                 type="text"
@@ -315,58 +309,58 @@ export default function Clientes() {
                 onChange={onChange('identificacion')}
                 pattern="^[0-9,.]*$"
                 title="Ingrese un número válido"
-                className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm outline-none focus:border-blue-400"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#4488ee] focus:ring-2 focus:ring-[#4488ee]/20 transition-all"
               />
             </div>
             <div>
-              <label className="block text-sm mb-1 font-medium inline-flex items-center gap-1">
-                <Phone size={14} /> Teléfono
+              <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 uppercase tracking-wide mb-1.5">
+                <Phone size={12} /> Teléfono
               </label>
               <input
                 type="tel"
                 autoComplete="off"
                 value={form.telefono}
                 onChange={onChange('telefono')}
-                className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm outline-none focus:border-blue-400"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#4488ee] focus:ring-2 focus:ring-[#4488ee]/20 transition-all"
               />
             </div>
           </div>
           <div>
-            <label className="block text-sm mb-1 font-medium inline-flex items-center gap-1">
-              <MapPin size={14} /> Dirección
+            <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 uppercase tracking-wide mb-1.5">
+              <MapPin size={12} /> Dirección
             </label>
             <input
               type="text"
               autoComplete="off"
               value={form.direccion}
               onChange={onChange('direccion')}
-              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm outline-none focus:border-blue-400"
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#4488ee] focus:ring-2 focus:ring-[#4488ee]/20 transition-all"
             />
           </div>
           <div>
-            <label className="block text-sm mb-1 font-medium inline-flex items-center gap-1">
-              <Mail size={14} /> Correo
+            <label className="flex items-center gap-1.5 text-xs font-bold text-slate-600 uppercase tracking-wide mb-1.5">
+              <Mail size={12} /> Correo
             </label>
             <input
               type="email"
               autoComplete="off"
               value={form.correo}
               onChange={onChange('correo')}
-              className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm outline-none focus:border-blue-400"
+              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#4488ee] focus:ring-2 focus:ring-[#4488ee]/20 transition-all"
             />
           </div>
-          <div className="flex justify-end gap-2 pt-2">
+          <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
             <button
               type="button"
               onClick={cerrarModal}
-              className="px-4 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded text-sm transition-colors"
+              className="px-4 h-9 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-sm font-semibold transition-colors"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-[#343a40] hover:bg-black disabled:opacity-60 text-white rounded text-sm transition-colors"
+              className="inline-flex items-center gap-1.5 px-4 h-9 bg-[#4488ee] hover:bg-[#3672c9] disabled:opacity-60 text-white rounded-lg text-sm font-semibold transition-colors shadow-sm"
             >
               {editingId ? <Pencil size={14} /> : <Plus size={14} />}
               {saving ? 'Guardando...' : 'Guardar'}
@@ -375,40 +369,40 @@ export default function Clientes() {
         </form>
       </Modal>
 
-      {/* Modal clientes top ─────────────────────────────────────────────────── */}
+      {/* Modal clientes top */}
       <Modal
         show={showTop}
         onClose={() => setShowTop(false)}
-        title="Clientes Top"
+        title="Top Clientes"
         wide
-        headerCls="bg-[#007bff]"
+        headerCls="bg-amber-500"
       >
         {loadingTop ? (
-          <p className="text-center text-gray-500 py-4">Cargando…</p>
+          <p className="text-center text-slate-400 py-6">Cargando…</p>
         ) : top.length === 0 ? (
-          <p className="text-center text-gray-500 py-4">Sin datos de compras todavía</p>
+          <p className="text-center text-slate-400 py-6">Sin datos de compras todavía</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-sm">
-              <thead>
-                <tr className="bg-gray-100">
-                  <th className="border border-gray-300 px-3 py-2 text-center w-16">#</th>
-                  <th className="border border-gray-300 px-3 py-2 text-left w-24">ID</th>
-                  <th className="border border-gray-300 px-3 py-2 text-left">Nombre del Cliente</th>
-                  <th className="border border-gray-300 px-3 py-2 text-right w-40">Total de Compras</th>
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 border-b border-slate-200">
+                <tr>
+                  <th className="px-4 py-2.5 text-center font-semibold text-slate-600 uppercase tracking-wide text-xs w-16">#</th>
+                  <th className="px-4 py-2.5 text-left font-semibold text-slate-600 uppercase tracking-wide text-xs w-24">ID</th>
+                  <th className="px-4 py-2.5 text-left font-semibold text-slate-600 uppercase tracking-wide text-xs">Nombre</th>
+                  <th className="px-4 py-2.5 text-right font-semibold text-slate-600 uppercase tracking-wide text-xs w-40">Total Compras</th>
                 </tr>
               </thead>
               <tbody>
                 {top.map((c, i) => (
-                  <tr key={c.clienteId} className="even:bg-gray-50">
-                    <td className="border border-gray-300 px-3 py-2 text-center">
+                  <tr key={c.clienteId} className="hover:bg-slate-50/70 border-b border-slate-100 last:border-0">
+                    <td className="px-4 py-2.5 text-center">
                       {i < 3
-                        ? <Award size={16} className={`inline ${i === 0 ? 'text-yellow-500' : i === 1 ? 'text-gray-400' : 'text-amber-700'}`} />
-                        : i + 1}
+                        ? <Award size={18} className={`inline ${i === 0 ? 'text-yellow-500' : i === 1 ? 'text-gray-400' : 'text-amber-700'}`} />
+                        : <span className="text-slate-500 font-bold">{i + 1}</span>}
                     </td>
-                    <td className="border border-gray-300 px-3 py-2 text-gray-500">{c.clienteId}</td>
-                    <td className="border border-gray-300 px-3 py-2 font-medium uppercase">{c.clienteNombre}</td>
-                    <td className="border border-gray-300 px-3 py-2 text-right font-semibold text-[#28a745]">
+                    <td className="px-4 py-2.5 text-slate-400 text-xs font-mono">{c.clienteId}</td>
+                    <td className="px-4 py-2.5 font-semibold uppercase text-slate-800">{c.clienteNombre}</td>
+                    <td className="px-4 py-2.5 text-right font-bold text-emerald-600 tabular-nums">
                       ${formatNumber(c.totalCompras)}
                     </td>
                   </tr>

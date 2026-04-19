@@ -2,24 +2,25 @@ import { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { toast } from 'sonner';
 import {
   Search, X, Filter, List, Calendar, Eye, Printer, FileText, Receipt,
+  ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { formatNumber, formatearFecha } from '../../utils/formatters';
 import {
   generarFacturaHTMLPDF, generarFacturaHTMLPOS,
   abrirVentanaImpresion, abrirVentanaPOS,
 } from '../../utils/printing';
-import { getFacturas, getFacturaDetalles } from '../../api';
+import { getFacturas, buscarFacturas, getFacturaDetalles } from '../../api';
 
 // ── Modal overlay ───────────────────────────────────────────────────────────
 function Modal({ show, onClose, children, wide }) {
   if (!show) return null;
   return (
     <div
-      className="fixed inset-0 z-[1050] bg-black/50 flex items-start justify-center pt-[60px] overflow-y-auto"
+      className="fixed inset-0 z-[1050] bg-slate-900/60 backdrop-blur-sm flex items-start justify-center pt-20 overflow-y-auto"
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
-        className={`bg-white rounded-md shadow-xl mb-8 max-w-[96vw] ${wide ? 'w-[1100px]' : 'w-[500px]'}`}
+        className={`bg-white rounded-2xl shadow-2xl mb-8 max-w-[96vw] overflow-hidden ${wide ? 'w-[1100px]' : 'w-[500px]'}`}
       >
         {children}
       </div>
@@ -27,7 +28,6 @@ function Modal({ show, onClose, children, wide }) {
   );
 }
 
-// ── Clickable copy cell ─────────────────────────────────────────────────────
 function CopyCell({ value, className = '' }) {
   const handleClick = () => {
     navigator.clipboard
@@ -39,14 +39,14 @@ function CopyCell({ value, className = '' }) {
     <td
       onClick={handleClick}
       title="Clic para copiar"
-      className={`cursor-pointer px-2 py-1.5 border border-gray-300 ${className}`}
+      className={`cursor-pointer px-3 py-2 border-b border-slate-100 hover:bg-[#4488ee]/5 transition-colors ${className}`}
     >
       {value}
     </td>
   );
 }
 
-// ── HTML fragments for print ────────────────────────────────────────────────
+// ── HTML fragments ──────────────────────────────────────────────────────────
 const filaProductoPDF = (d) => `
   <tr>
     <td>${d.nombreProducto}</td>
@@ -74,7 +74,6 @@ const CLIENTE_POS_DEFAULT = { nombre: 'CLIENTE NO REGISTRADO', identificacion: '
 const fmtHora = (fechaStr) =>
   new Date(fechaStr).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' });
 
-// ── Stable subcomponents (module-scope = no re-mount on parent re-render) ───
 function ColGroup({ agrupada }) {
   return (
     <colgroup>
@@ -88,12 +87,16 @@ function ColGroup({ agrupada }) {
   );
 }
 
-function TableHead({ agrupada }) {
+function TableHead({ agrupada, sticky }) {
   return (
-    <thead>
-      <tr className="bg-gray-100">
+    <thead className={sticky ? '' : 'bg-slate-50 border-b border-slate-200'}>
+      <tr>
         {['Factura ID', 'Cliente', 'Cédula/NIT', agrupada ? 'Hora' : 'Fecha y Hora', 'Total', 'Acciones'].map((h) => (
-          <th key={h} className="px-2.5 py-2 border border-gray-300 font-semibold whitespace-nowrap text-left">
+          <th
+            key={h}
+            className={`px-3 py-3 font-semibold text-slate-600 uppercase tracking-wide text-xs text-left whitespace-nowrap ${sticky ? 'sticky top-0 z-10 bg-slate-50 border-b border-slate-200' : ''
+              }`}
+          >
             {h}
           </th>
         ))}
@@ -106,36 +109,36 @@ const FilaFactura = memo(function FilaFactura({ factura, agrupada, onVerDetalles
   const nombre = factura.cliente ? factura.cliente.nombre : 'Cliente no disponible';
   const cedula = factura.cliente ? factura.cliente.identificacion : 'N/A';
   return (
-    <tr className="even:bg-gray-50 hover:bg-blue-50 transition-colors">
-      <td className="px-2.5 py-1.5 border border-gray-300 truncate" title={factura.serial}>
+    <tr className="hover:bg-slate-50/70 border-b border-slate-100 last:border-0 transition-colors">
+      <td className="px-3 py-2.5 truncate text-slate-500 font-mono text-xs" title={factura.serial}>
         {factura.serial}
       </td>
-      <td className="px-2.5 py-1.5 border border-gray-300 truncate" title={nombre}>
+      <td className="px-3 py-2.5 truncate font-semibold text-slate-800" title={nombre}>
         {nombre}
       </td>
-      <td className="px-2.5 py-1.5 border border-gray-300 truncate" title={cedula}>
+      <td className="px-3 py-2.5 truncate text-slate-600" title={cedula}>
         {cedula}
       </td>
-      <td className="px-2.5 py-1.5 border border-gray-300 truncate">
+      <td className="px-3 py-2.5 truncate text-slate-600">
         {agrupada
           ? fmtHora(factura.fechaEmision)
           : formatearFecha(new Date(factura.fechaEmision))}
       </td>
-      <td className="px-2.5 py-1.5 border border-gray-300 text-[#4488ee] font-bold truncate">
-        {formatNumber(factura.total)}
+      <td className="px-3 py-2.5 text-[#4488ee] font-bold truncate tabular-nums">
+        ${formatNumber(factura.total)}
       </td>
-      <td className="px-1 py-1 border border-gray-300 text-center whitespace-nowrap">
+      <td className="px-3 py-2.5 text-center whitespace-nowrap">
         <button
           onClick={() => onVerDetalles(factura.id)}
           title="Ver detalles"
-          className="inline-flex items-center justify-center bg-[#17a2b8] hover:bg-[#138496] text-white rounded p-1.5 mr-1 transition-colors"
+          className="inline-flex items-center justify-center bg-cyan-500 hover:bg-cyan-600 text-white rounded-md p-1.5 mr-1 transition-colors shadow-sm"
         >
           <Eye size={14} />
         </button>
         <button
           onClick={() => onImprimir(factura)}
           title="Imprimir"
-          className="inline-flex items-center justify-center bg-[#28a745] hover:bg-[#218838] text-white rounded p-1.5 transition-colors"
+          className="inline-flex items-center justify-center bg-emerald-500 hover:bg-emerald-600 text-white rounded-md p-1.5 transition-colors shadow-sm"
         >
           <Printer size={14} />
         </button>
@@ -164,46 +167,56 @@ const fmtKeyFecha = (key) => {
   return formatearFecha(new Date(y, m - 1, d));
 };
 
-// ── Main component ──────────────────────────────────────────────────────────
+// ── Main ────────────────────────────────────────────────────────────────────
 export default function Ventas() {
   const [todasFacturas, setTodasFacturas] = useState([]);
   const [busqueda, setBusqueda] = useState('');
+  const [debouncedBusqueda, setDebouncedBusqueda] = useState('');
   const [vistaAgrupada, setVistaAgrupada] = useState(true);
   const [loading, setLoading] = useState(true);
 
-  // Modals
+  const [currentPage, setCurrentPage] = useState(0);
+  const [pageSize, setPageSize] = useState(20);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
+
   const [showDetalles, setShowDetalles] = useState(false);
   const [detallesFactura, setDetallesFactura] = useState([]);
   const [showImprimir, setShowImprimir] = useState(false);
   const [facturaSeleccionada, setFacturaSeleccionada] = useState(null);
 
-  // ── Load ─────────────────────────────────────────────────────────────────
   useEffect(() => {
-    getFacturas()
+    const t = setTimeout(() => setDebouncedBusqueda(busqueda.trim()), 300);
+    return () => clearTimeout(t);
+  }, [busqueda]);
+
+  useEffect(() => {
+    setLoading(true);
+    const req = debouncedBusqueda
+      ? buscarFacturas(debouncedBusqueda, currentPage, pageSize)
+      : getFacturas(currentPage, pageSize);
+    req
       .then((res) => {
-        const sorted = [...res.data].sort(
-          (a, b) => new Date(b.fechaEmision) - new Date(a.fechaEmision)
-        );
-        setTodasFacturas(sorted);
+        const data = res.data;
+        if (Array.isArray(data)) {
+          const sorted = [...data].sort((a, b) => new Date(b.fechaEmision) - new Date(a.fechaEmision));
+          setTodasFacturas(sorted);
+          setTotalPages(1);
+          setTotalElements(sorted.length);
+        } else {
+          setTodasFacturas(data.content || []);
+          setTotalPages(data.totalPages || 0);
+          setTotalElements(data.totalElements || 0);
+        }
       })
       .catch(() => toast.error('Error al cargar las facturas.'))
       .finally(() => setLoading(false));
-  }, []);
+  }, [currentPage, pageSize, debouncedBusqueda]);
 
-  // ── Derived (filtered list) ──────────────────────────────────────────────
-  const facturasFiltradas = useMemo(() => {
-    const q = busqueda.trim().toUpperCase();
-    if (!q) return todasFacturas;
-    return todasFacturas.filter((f) => {
-      const nombre = (f.cliente?.nombre || f.clienteNombre || '').toUpperCase();
-      const cedula = (f.cliente?.identificacion || '').toUpperCase();
-      return nombre.includes(q) || cedula.includes(q);
-    });
-  }, [todasFacturas, busqueda]);
+  const facturasFiltradas = todasFacturas;
 
-  const limpiarBusqueda = useCallback(() => setBusqueda(''), []);
+  const limpiarBusqueda = useCallback(() => { setBusqueda(''); setCurrentPage(0); }, []);
 
-  // ── Details modal ─────────────────────────────────────────────────────────
   const verDetalles = useCallback(async (facturaId) => {
     try {
       const res = await getFacturaDetalles(facturaId);
@@ -214,7 +227,6 @@ export default function Ventas() {
     }
   }, []);
 
-  // ── Print modal ───────────────────────────────────────────────────────────
   const abrirImprimir = useCallback((factura) => {
     setFacturaSeleccionada(factura);
     setShowImprimir(true);
@@ -268,93 +280,120 @@ export default function Ventas() {
     }
   };
 
-  const totalMostradas = facturasFiltradas.length;
-  const totalGeneral = todasFacturas.length;
+  const totalGeneral = totalElements;
   const gruposFecha = useMemo(
     () => (vistaAgrupada ? Object.entries(agruparPorFecha(facturasFiltradas)) : []),
     [vistaAgrupada, facturasFiltradas]
   );
 
-  const resultadosColor = busqueda
-    ? (totalMostradas > 0 ? 'text-green-600' : 'text-red-600')
-    : 'text-gray-500';
+  const irAPagina = (page) => {
+    if (page < 0 || page >= totalPages) return;
+    setCurrentPage(page);
+  };
+  const maxVisible = 5;
+  const startPage = Math.max(0, Math.min(currentPage - Math.floor(maxVisible / 2), totalPages - maxVisible));
+  const endPage = Math.min(totalPages - 1, startPage + maxVisible - 1);
 
-  // ── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="pt-[55px] min-h-screen bg-white">
-      <div className="w-[92%] max-w-[1500px] mx-auto px-4">
-        <h1 className="text-center text-2xl font-semibold my-3 select-none">
-          Ventas Generadas
-        </h1>
-
-        {/* Search + toggle bar */}
-        <div className="flex items-start justify-between mb-3.5 gap-2.5 flex-wrap">
-          <div className="flex-[0_0_20%]" />
-
-          <div className="flex-[0_0_50%] min-w-[260px]">
-            <div className="flex shadow-sm rounded overflow-hidden">
-              <span className="flex items-center px-3 bg-white border border-r-0 border-gray-300 text-gray-500">
-                <Search size={16} />
-              </span>
+    <div className="h-screen flex flex-col bg-slate-50 overflow-hidden">
+      {/* Page Header */}
+      <header className="shrink-0 bg-white border-b border-slate-200 px-8 py-5">
+        <div className="max-w-[1800px] mx-auto w-full flex items-center justify-between gap-4 flex-wrap">
+          <div>
+            <h1 className="text-2xl font-black text-slate-900 tracking-tight">Ventas</h1>
+            <p className="text-sm text-slate-500 mt-0.5">
+              {debouncedBusqueda
+                ? <><span className="font-bold text-slate-700">{totalGeneral}</span> coincidencias · Página {currentPage + 1} de {Math.max(1, totalPages)}</>
+                : <>Total: <span className="font-bold text-slate-700">{totalGeneral}</span> facturas · Página {currentPage + 1} de {Math.max(1, totalPages)}</>}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
                 value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value)}
-                placeholder="Buscar por nombre o cédula del cliente..."
+                onChange={(e) => { setBusqueda(e.target.value); setCurrentPage(0); }}
+                placeholder="Buscar por nombre, cédula o serial..."
                 autoCorrect="off"
                 spellCheck={false}
-                className="flex-1 px-2.5 py-1.5 text-sm border border-gray-300 outline-none focus:border-blue-400"
+                className="w-[300px] bg-white border border-slate-200 rounded-lg pl-10 pr-9 h-9 text-sm outline-none focus:border-[#4488ee] focus:ring-2 focus:ring-[#4488ee]/20 transition-all"
               />
-              <button
-                onClick={limpiarBusqueda}
-                title="Limpiar búsqueda"
-                className="px-3 py-1.5 border border-l-0 border-gray-300 bg-white hover:bg-gray-50 text-gray-500 transition-colors"
-              >
-                <X size={16} />
-              </button>
+              {busqueda && (
+                <button
+                  onClick={limpiarBusqueda}
+                  title="Limpiar"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                >
+                  <X size={14} />
+                </button>
+              )}
             </div>
-            <small className={`flex items-center justify-center gap-1 mt-1.5 ${resultadosColor}`}>
-              {busqueda ? <Filter size={12} /> : <List size={12} />}
-              {busqueda
-                ? `Mostrando ${totalMostradas} de ${totalGeneral} facturas`
-                : `Total: ${totalGeneral} facturas`}
-            </small>
-          </div>
-
-          <div className="flex-[0_0_20%] text-right">
             <button
               onClick={() => setVistaAgrupada((v) => !v)}
-              className="inline-flex items-center gap-1.5 border border-[#007bff] rounded bg-white text-[#007bff] hover:bg-[#007bff] hover:text-white px-3.5 py-1.5 text-sm transition-colors"
+              className="inline-flex items-center gap-1.5 border border-[#4488ee] bg-white hover:bg-[#4488ee] text-[#4488ee] hover:text-white rounded-lg px-4 h-9 text-sm font-semibold transition-colors"
             >
               {vistaAgrupada ? <List size={14} /> : <Calendar size={14} />}
-              {vistaAgrupada ? 'Vista Normal' : 'Vista Agrupada'}
+              {vistaAgrupada ? 'Vista Normal' : 'Agrupar por Fecha'}
             </button>
           </div>
         </div>
+      </header>
 
-        {/* Content */}
-        {loading ? (
-          <p className="text-center text-gray-500 mt-8">Cargando facturas…</p>
-        ) : facturasFiltradas.length === 0 ? (
-          <p className="text-center text-red-600 mt-5">
-            {busqueda ? 'No se encontraron facturas para esa búsqueda.' : 'No hay facturas disponibles.'}
-          </p>
-        ) : vistaAgrupada ? (
-          gruposFecha.map(([fechaKey, facturas]) => (
-            <div key={fechaKey} className="grupo-fecha">
-              <h4 className="m-0 px-3 py-2 bg-gray-50 text-base font-semibold border-b border-gray-300">
-                {esHoy(fechaKey) ? 'Hoy — ' : ''}{fmtKeyFecha(fechaKey)}
-              </h4>
-              <div className="overflow-x-auto">
-                <table className="w-full table-fixed border-collapse text-sm min-w-[900px]">
-                  <ColGroup agrupada />
-                  <TableHead agrupada />
+      {/* Content — no page scroll, content scrolls internally */}
+      <main className="flex-1 min-h-0 px-8 py-6 overflow-hidden">
+        <div className="max-w-[1800px] mx-auto w-full h-full flex flex-col">
+          {loading ? (
+            <p className="text-center text-slate-400 mt-12">Cargando facturas…</p>
+          ) : facturasFiltradas.length === 0 ? (
+            <div className="text-center text-slate-400 mt-12">
+              <Filter size={40} className="mx-auto mb-3 text-slate-300" />
+              <p>{busqueda ? 'No se encontraron facturas para esa búsqueda.' : 'No hay facturas disponibles.'}</p>
+            </div>
+          ) : vistaAgrupada ? (
+            <div className="flex-1 min-h-0 overflow-auto space-y-4 pr-1">
+              {gruposFecha.map(([fechaKey, facturas]) => (
+                <div key={fechaKey} className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                  <div className="px-5 py-3 bg-slate-50 border-b border-slate-200 flex items-center gap-2 sticky top-0 z-10">
+                    <Calendar size={14} className="text-slate-500" />
+                    <h4 className="m-0 text-sm font-bold text-slate-700">
+                      {esHoy(fechaKey) && <span className="text-[#4488ee] mr-2">Hoy</span>}
+                      {fmtKeyFecha(fechaKey)}
+                    </h4>
+                    <span className="ml-auto text-xs text-slate-500 font-semibold">{facturas.length} facturas</span>
+                  </div>
+                  <div className="overflow-x-auto">
+                    <table className="w-full table-fixed text-sm min-w-[900px]">
+                      <ColGroup agrupada />
+                      <TableHead agrupada />
+                      <tbody>
+                        {facturas.map((f) => (
+                          <FilaFactura
+                            key={f.id}
+                            factura={f}
+                            agrupada
+                            onVerDetalles={verDetalles}
+                            onImprimir={abrirImprimir}
+                          />
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="flex-1 min-h-0 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="h-full overflow-auto">
+                <table className="w-full table-fixed text-sm min-w-[1050px]">
+                  <ColGroup agrupada={false} />
+                  <TableHead agrupada={false} sticky />
                   <tbody>
-                    {facturas.map((f) => (
+                    {facturasFiltradas.map((f) => (
                       <FilaFactura
                         key={f.id}
                         factura={f}
-                        agrupada
+                        agrupada={false}
                         onVerDetalles={verDetalles}
                         onImprimir={abrirImprimir}
                       />
@@ -363,43 +402,73 @@ export default function Ventas() {
                 </table>
               </div>
             </div>
-          ))
-        ) : (
-          <div className="overflow-x-auto mb-8 border border-gray-300 rounded shadow-sm">
-            <table className="w-full table-fixed border-collapse text-sm min-w-[1050px]">
-              <ColGroup agrupada={false} />
-              <TableHead agrupada={false} />
-              <tbody>
-                {facturasFiltradas.map((f) => (
-                  <FilaFactura
-                    key={f.id}
-                    factura={f}
-                    agrupada={false}
-                    onVerDetalles={verDetalles}
-                    onImprimir={abrirImprimir}
-                  />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+          )}
 
-      {/* ── MODAL: Detalles de Factura ─────────────────────────────────────── */}
-      <Modal show={showDetalles} onClose={() => setShowDetalles(false)} wide>
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-300">
-          <h5 className="m-0 text-base font-semibold">Detalles de Factura</h5>
-          <button
-            onClick={() => setShowDetalles(false)}
-            className="border-0 bg-transparent text-2xl leading-none cursor-pointer text-gray-500 hover:text-gray-700"
-          >×</button>
+          {/* Pagination */}
+          {!loading && totalElements > 0 && (
+            <div className="shrink-0 mt-4 flex items-center justify-center gap-6 flex-wrap">
+              <div className="flex items-center gap-2 text-sm text-slate-600">
+                <label className="font-semibold">Mostrar:</label>
+                <select
+                  value={pageSize}
+                  onChange={(e) => { setPageSize(parseInt(e.target.value)); setCurrentPage(0); }}
+                  className="border-2 border-slate-200 rounded-lg px-2 h-9 text-sm outline-none focus:border-[#4488ee] bg-white"
+                >
+                  <option value="10">10</option>
+                  <option value="20">20</option>
+                  <option value="50">50</option>
+                </select>
+                <span className="text-slate-500">por página</span>
+              </div>
+              {totalPages > 1 && (
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => irAPagina(currentPage - 1)}
+                    disabled={currentPage === 0}
+                    className="inline-flex items-center justify-center w-9 h-9 border border-slate-200 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-slate-700 transition-colors"
+                  >
+                    <ChevronLeft size={16} />
+                  </button>
+                  {Array.from({ length: endPage - startPage + 1 }, (_, i) => startPage + i).map((pg) => (
+                    <button
+                      key={pg}
+                      onClick={() => irAPagina(pg)}
+                      className={`inline-flex items-center justify-center w-9 h-9 rounded-lg text-sm font-semibold transition-colors ${pg === currentPage
+                          ? 'bg-[#4488ee] text-white shadow-sm shadow-[#4488ee]/20'
+                          : 'border border-slate-200 hover:bg-slate-100 text-slate-700'
+                        }`}
+                    >
+                      {pg + 1}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => irAPagina(currentPage + 1)}
+                    disabled={currentPage >= totalPages - 1}
+                    className="inline-flex items-center justify-center w-9 h-9 border border-slate-200 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-slate-700 transition-colors"
+                  >
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse text-[0.85rem]">
-            <thead>
-              <tr className="bg-gray-100">
+      </main>
+
+      {/* MODAL: Detalles */}
+      <Modal show={showDetalles} onClose={() => setShowDetalles(false)} wide>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-900 text-white">
+          <h5 className="m-0 text-base font-bold">Detalles de Factura</h5>
+          <button onClick={() => setShowDetalles(false)} className="text-white/70 hover:text-white transition-colors">
+            <X size={20} />
+          </button>
+        </div>
+        <div className="overflow-x-auto max-h-[70vh]">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50 border-b border-slate-200 sticky top-0">
+              <tr>
                 {['Producto', 'Descripción', 'Cantidad', 'Garantía', 'P.C', 'P.V', 'Total P.C', 'Total P.V'].map((h) => (
-                  <th key={h} className="px-2 py-2 border border-gray-300 font-semibold whitespace-nowrap text-left">
+                  <th key={h} className="px-3 py-2.5 font-semibold text-slate-600 uppercase tracking-wide text-xs text-left whitespace-nowrap">
                     {h}
                   </th>
                 ))}
@@ -407,55 +476,54 @@ export default function Ventas() {
             </thead>
             <tbody>
               {detallesFactura.map((d, i) => (
-                <tr key={i} className="hover:bg-blue-50">
-                  <CopyCell value={d.nombreProducto} />
+                <tr key={i} className="hover:bg-slate-50/70">
+                  <CopyCell value={d.nombreProducto} className="font-semibold text-slate-800" />
                   <CopyCell value={d.descripcion || ''} />
-                  <CopyCell value={d.cantidad} />
+                  <CopyCell value={d.cantidad} className="text-center" />
                   <CopyCell value={d.garantia} />
-                  <CopyCell value={formatNumber(d.precioCompra)} />
-                  <CopyCell value={formatNumber(d.precioVenta)} />
+                  <CopyCell value={formatNumber(d.precioCompra)} className="text-right tabular-nums" />
+                  <CopyCell value={formatNumber(d.precioVenta)} className="text-right tabular-nums" />
                   <CopyCell
                     value={formatNumber(d.cantidad * d.precioCompra)}
-                    className="text-[#0db423] font-bold"
+                    className="text-right tabular-nums text-emerald-600 font-bold"
                   />
                   <CopyCell
                     value={formatNumber(d.cantidad * d.precioVenta)}
-                    className="text-[#4488ee] font-bold"
+                    className="text-right tabular-nums text-[#4488ee] font-bold"
                   />
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        <div className="px-4 py-2.5 border-t border-gray-300 text-right">
+        <div className="px-6 py-3 border-t border-slate-200 text-right bg-slate-50">
           <button
             onClick={() => setShowDetalles(false)}
-            className="bg-[#17a2b8] hover:bg-[#138496] text-white rounded px-4 py-1.5 text-sm transition-colors"
-          >Cerrar</button>
+            className="bg-cyan-500 hover:bg-cyan-600 text-white rounded-lg px-5 h-9 text-sm font-semibold transition-colors shadow-sm"
+          >
+            Cerrar
+          </button>
         </div>
       </Modal>
 
-      {/* ── MODAL: Formato de impresión ────────────────────────────────────── */}
+      {/* MODAL: Formato impresión */}
       <Modal show={showImprimir} onClose={() => setShowImprimir(false)}>
-        <div className="flex items-center px-4 py-3 border-b border-gray-300">
-          <h5 className="m-0 text-base flex-1 text-center font-semibold">
-            Seleccione el formato de impresión
-          </h5>
-          <button
-            onClick={() => setShowImprimir(false)}
-            className="border-0 bg-transparent text-2xl leading-none cursor-pointer text-gray-500 hover:text-gray-700"
-          >×</button>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-900 text-white">
+          <h5 className="m-0 text-base font-bold">Seleccione el formato de impresión</h5>
+          <button onClick={() => setShowImprimir(false)} className="text-white/70 hover:text-white transition-colors">
+            <X size={20} />
+          </button>
         </div>
-        <div className="px-6 py-6 text-center">
+        <div className="px-6 py-8 text-center flex justify-center gap-3 flex-wrap">
           <button
             onClick={imprimirPOS}
-            className="inline-flex items-center gap-2 bg-[#28a745] hover:bg-[#218838] text-white rounded px-7 py-2.5 text-base cursor-pointer m-2 transition-colors"
+            className="inline-flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg px-6 h-11 text-sm font-semibold transition-colors shadow-sm"
           >
             <Receipt size={18} /> Imprimir POS
           </button>
           <button
             onClick={imprimirPDF}
-            className="inline-flex items-center gap-2 bg-[#007bff] hover:bg-[#0069d9] text-white rounded px-7 py-2.5 text-base cursor-pointer m-2 transition-colors"
+            className="inline-flex items-center gap-2 bg-[#4488ee] hover:bg-[#3672c9] text-white rounded-lg px-6 h-11 text-sm font-semibold transition-colors shadow-sm"
           >
             <FileText size={18} /> Imprimir PDF
           </button>

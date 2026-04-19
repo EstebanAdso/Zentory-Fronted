@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import Navbar from './components/Navbar';
@@ -12,12 +13,31 @@ import Activos from './pages/Activos';
 import Clientes from './pages/Clientes';
 import Config from './pages/Config';
 
+const LS_NAV_LOCK = 'navbarLocked';
+
 export default function App() {
+  const [locked, setLocked] = useState(() => localStorage.getItem(LS_NAV_LOCK) === 'true');
+  const [hovered, setHovered] = useState(false);
+  const expanded = locked || hovered;
+
+  useEffect(() => {
+    localStorage.setItem(LS_NAV_LOCK, String(locked));
+  }, [locked]);
+
   return (
     <BrowserRouter>
       <div className="min-h-screen bg-white">
-        <Navbar />
-        <main>
+        <Navbar
+          locked={locked}
+          hovered={hovered}
+          onHoverChange={setHovered}
+          onToggleLock={() => setLocked(v => !v)}
+        />
+        <main
+          className={`transition-[padding] duration-200 ease-out ${
+            expanded ? 'pl-[240px]' : 'pl-[72px]'
+          }`}
+        >
           <Routes>
             <Route path="/" element={<Facturacion />} />
             <Route path="/inventario" element={<Inventario />} />
@@ -30,7 +50,7 @@ export default function App() {
             <Route path="/config" element={<Config />} />
           </Routes>
         </main>
-        <Toaster richColors position="top-right" offset="80px" />
+        <Toaster richColors position="top-right" />
       </div>
     </BrowserRouter>
   );
