@@ -11,6 +11,10 @@ import {
   generarFacturaHTMLPDF, generarFacturaHTMLPOS,
   generarPrestamoHTMLPDF, generarPrestamoHTMLPOS,
 } from '../../utils/printing';
+import {
+  CircleDollarSign, ShoppingBag, Plus, Trash2, Edit, Search, Tag, 
+  Printer, FileText, XCircle
+} from 'lucide-react';
 
 // ── LocalStorage ───────────────────────────────────────────────────────────
 const CLI_FIELDS = ['nombreCliente', 'cedulaNit', 'correoCliente', 'telefonoCliente', 'direccionCliente'];
@@ -36,23 +40,49 @@ function useBarcodeScanner(onDetect) {
 }
 
 // ── Shared styles ──────────────────────────────────────────────────────────
-// Inputs equivalentes a Bootstrap 4 form-control con font-size: 0.9em
 const iSt = {
-  width: '100%', border: '1px solid #ced4da', borderRadius: '4px',
-  padding: '4px 8px', fontSize: '0.9em', color: '#000',
-  backgroundColor: '#fff', boxSizing: 'border-box', outline: 'none',
+  width: '100%',
+  border: '1px solid #cbd5e1',
+  borderRadius: '8px',
+  padding: '11px 14px',
+  fontSize: '0.95em',
+  color: '#1e293b',
+  backgroundColor: '#fff',
+  boxSizing: 'border-box',
+  outline: 'none',
+  transition: 'all 0.2s',
+  fontWeight: '500'
 };
-const lSt = { display: 'block', fontSize: '0.9em', marginBottom: '2px' };
-// Fieldset igual al original
+
+const lSt = { 
+  display: 'block', 
+  fontSize: '0.88em', 
+  marginBottom: '6px', 
+  fontWeight: '700', 
+  color: '#1e293b' 
+};
+
 const fsSt = (extra = {}) => ({
-  border: '2px solid rgba(17,22,22,0.15)', borderRadius: '10px',
-  padding: '4px 6px', marginBottom: '3px', ...extra,
+  border: '1px solid #e2e8f0',
+  borderRadius: '12px',
+  padding: '18px',
+  marginBottom: '16px',
+  backgroundColor: '#fff',
+  ...extra,
 });
-const lgSt = { fontSize: '0.95em', padding: '0 4px' };
+
+const lgSt = { 
+  fontSize: '0.85em', 
+  padding: '0 8px', 
+  fontWeight: '700', 
+  color: '#0f172a',
+  backgroundColor: '#fff',
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 export default function Facturacion() {
   const [tipDoc, setTipDoc] = useState('FACTURA');
+  const [esPrest, setEsPrest] = useState(false);
   const [cliente, setCliente] = useState({ nombreCliente: '', cedulaNit: '', telefonoCliente: '', correoCliente: '', direccionCliente: '' });
   const [sugCli, setSugCli] = useState([]); const [showCli, setShowCli] = useState(false);
   const [prod, setProd] = useState({ nombre: '', precio: '', pc: '', cantidad: '1', garantia: '1', descripcion: '' });
@@ -139,16 +169,6 @@ export default function Facturacion() {
     limpiarProd();
   }
   function eliminar(idx) { setCarrito(p => p.filter((_, i) => i !== idx)); }
-  function editar(idx) {
-    const item = carrito[idx];
-    setProd({ nombre: item.nombre, precio: formatNumber(item.precioOriginal), pc: formatNumber(item.pc), cantidad: String(item.cantidad), garantia: String(item.garantia), descripcion: item.descripcion });
-    setProdSel({ id: item.id, nombre: item.nombre, precioVendido: item.precioOriginal, precioComprado: item.pc, cantidad: 9999 });
-    setCarrito(p => p.filter((_, i) => i !== idx));
-  }
-  function descInd(idx, pct) {
-    if (pct < 0) pct = 0; if (pct > 20) { pct = 20; toast.error('El descuento no puede ser mayor al 20%'); }
-    setCarrito(p => p.map((item, i) => { if (i !== idx) return item; const pr = item.precioOriginal * (1 - pct / 100); return { ...item, descuento: pct, precioUnitario: pr, total: pr * item.cantidad }; }));
-  }
   function applyDescGen() {
     const pct = parseFloat(descGen);
     if (isNaN(pct) || pct <= 0) { toast.error('Ingrese un porcentaje válido'); return; }
@@ -158,14 +178,14 @@ export default function Facturacion() {
     setDescGen(''); toast.success(`Descuento del ${pct}% aplicado a todos los productos`);
   }
   function removeDescGen() {
-    if (!carrito.some(p => p.descuento > 0)) { toast.info('No hay descuentos aplicados'); return; }
     setCarrito(p => p.map(item => ({ ...item, descuento: 0, precioUnitario: item.precioOriginal, total: item.precioOriginal * item.cantidad })));
-    setDescGen(''); toast.success('Descuentos eliminados de todos los productos');
+    setDescGen('');
   }
 
-  const totalCarrito = carrito.reduce((s, p) => s + p.total, 0);
-  const totalOriginal = carrito.reduce((s, p) => s + p.precioOriginal * p.cantidad, 0);
-  const montoDesc = totalOriginal - totalCarrito;
+  const totalCarrito = carrito.reduce((acc, item) => acc + item.total, 0) * (1 - (parseFloat(descGen) || 0) / 100);
+  const totalSinDesc = carrito.reduce((acc, item) => acc + (item.precioOriginal * item.cantidad), 0);
+  const ahorroTotal = totalSinDesc - totalCarrito;
+  const ahorroPorc = totalSinDesc > 0 ? (ahorroTotal / totalSinDesc) * 100 : 0;
 
   function limpiarProd() {
     setProd({ nombre: '', precio: '', pc: '', cantidad: '1', garantia: '1', descripcion: '' });
@@ -173,7 +193,7 @@ export default function Facturacion() {
   }
   function limpiarTodo() {
     setCliente({ nombreCliente: '', cedulaNit: '', telefonoCliente: '', correoCliente: '', direccionCliente: '' });
-    limpiarProd(); setCarrito([]); setDescGen(''); setAbono(''); setObs(''); setTipDoc('FACTURA');
+    limpiarProd(); setCarrito([]); setDescGen(''); setAbono(''); setObs(''); setTipDoc('FACTURA'); setEsPrest(false);
     lsRemove([...CLI_FIELDS, LS_PROD]);
   }
   function validar() {
@@ -239,296 +259,291 @@ export default function Facturacion() {
     });
   }
 
-  const esPrest = tipDoc !== 'FACTURA';
   const titulo = tipDoc === 'FACTURA' ? 'Facturación' : tipDoc === 'PRESTAMO' ? 'Préstamo (Fiado)' : 'Apartado (Separar)';
 
-  // ── Render ─────────────────────────────────────────────────────────────
+  function editar(idx) {
+    const item = carrito[idx];
+    setProd({ nombre: item.nombre, precio: formatNumber(item.precioOriginal), pc: formatNumber(item.pc), cantidad: String(item.cantidad), garantia: String(item.garantia), descripcion: item.descripcion });
+    setProdSel({ id: item.id, nombre: item.nombre, precioVendido: item.precioOriginal, precioComprado: item.pc, cantidad: 9999 });
+    setCarrito(p => p.filter((_, i) => i !== idx));
+  }
+
   return (
     <>
-      {/*
-        Layout: empieza justo bajo el nav (55px), ocupa el resto del viewport.
-        Ancho 100%. Overflow hidden → sin scroll exterior.
-        Dos columnas flexbox que llenan el alto disponible.
-      */}
-      <div style={{ paddingTop: '55px', height: '100vh', width: '96%', maxWidth: '1500px', margin: '0 auto', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <style>{`
+        .factura-input:focus { border-color: #3b82f6; }
+        .action-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border-radius: 8px; font-weight: 700; cursor: pointer; transition: all 0.2s; border: none; font-size: 0.85em; text-transform: uppercase; }
+        .action-btn:hover { filter: brightness(0.9); transform: translateY(-1px); }
+        .scroll-custom::-webkit-scrollbar { width: 4px; }
+        .scroll-custom::-webkit-scrollbar-track { background: transparent; }
+        .scroll-custom::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        
+        .cart-card { 
+          background: #fff; border: 1px solid #f1f5f9; border-radius: 12px; padding: 15px; margin-bottom: 12px;
+          display: grid; grid-template-columns: 1fr auto; gap: 10px; position: relative; transition: all 0.2s;
+        }
+        .cart-card:hover { border-color: #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); }
+        .cart-input-mini { border: 1px solid #94a3b8; border-radius: 6px; padding: 4px 8px; width: 55px; font-size: 0.9em; text-align: center; background: #ffffff; font-weight: 800; color: #1e293b; outline: none; transition: all 0.2s; }
+        .cart-input-mini:focus { border-color: #000000; box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.05); }
+        
+        ::placeholder { color: #94a3b8; opacity: 1; font-weight: 400; }
+        ::-ms-input-placeholder { color: #94a3b8; }
+        
+        .btn-icon-sm { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 6px; cursor: pointer; border: none; transition: 0.2s; }
+      `}</style>
 
-        {/* ── Two-column row: fills all remaining height ── */}
-        <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
-
-          {/* ── LEFT COLUMN ──────────────────────────────────────────── */}
-          <div style={{
-            flex: 1, display: 'flex', flexDirection: 'column',
-            borderRight: '2px solid rgba(17,22,22,0.1)',
-            padding: '0 10px', overflowY: 'auto', minHeight: 0,
-          }}>
-            <h1 style={{ fontSize: '2em', textAlign: 'center', userSelect: 'none', margin: '10px 0 4px 0', flexShrink: 0 }}>
+      <div style={{ paddingTop: '55px', width: '96%', maxWidth: '1600px', margin: '0 auto', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '40px', alignItems: 'stretch', padding: '20px 0' }}>
+          
+          {/* ── LEFT COLUMN: ENTRY ── */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <h1 style={{ fontSize: '1.6em', fontWeight: '800', color: '#0f172a', margin: '15px 0 10px 0', display: 'flex', alignItems: 'center', gap: '10px' }}>
               {titulo}
             </h1>
 
-            {/* ── Tipo de documento ── */}
-            <fieldset style={fsSt({ flexShrink: 0 })}>
-              <legend style={lgSt}>Tipo de Documento</legend>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <div style={{ flex: 1 }}>
-                  <label style={lSt}>Tipo de Documento</label>
-                  <select style={iSt} value={tipDoc} onChange={e => setTipDoc(e.target.value)}>
-                    <option value="FACTURA">Factura Normal</option>
-                    <option value="PRESTAMO">Préstamo (Fiado)</option>
-                    <option value="APARTADO">Apartado (Separar producto)</option>
-                  </select>
-                </div>
-                {tipDoc === 'APARTADO' && (
-                  <div style={{ flex: 1 }}>
-                    <label style={lSt}>Abono Inicial:</label>
-                    <input type="text" style={iSt} placeholder="$0" autoComplete="off" value={abono} onChange={e => setAbono(e.target.value)} />
-                  </div>
-                )}
-              </div>
-              {esPrest && (
-                <div style={{ marginTop: '3px' }}>
-                  <label style={lSt}>Observaciones:</label>
-                  <textarea style={{ ...iSt, resize: 'none' }} rows={1} placeholder="Notas adicionales..." value={obs} onChange={e => setObs(e.target.value)} />
-                </div>
-              )}
+            <fieldset style={fsSt({ marginBottom: '10px', padding: '20px' })}>
+              <legend style={lgSt}>Configuración de Venta</legend>
+              <label style={lSt}>Tipo de Documento</label>
+              <select style={{ ...iSt, background: '#f8fafc' }} value={tipDoc} onChange={e => { setTipDoc(e.target.value); setEsPrest(e.target.value === 'FACTURA' ? false : true); }}>
+                <option value="FACTURA">📄 Factura de Venta</option>
+                <option value="PRESTAMO">🤝 Préstamo (Fiado)</option>
+                <option value="APARTADO">🏷️ Apartado (Separar)</option>
+              </select>
             </fieldset>
 
-            {/* ── Datos del cliente ── */}
-            <fieldset style={fsSt({ flexShrink: 0 })}>
-              <legend style={lgSt}>Datos del Cliente</legend>
-              <div style={{ display: 'flex', gap: '6px', marginBottom: '3px' }}>
-                <div style={{ flex: '0 0 58%', position: 'relative' }}>
-                  <label style={lSt}>Nombre del Cliente:</label>
-                  <input type="text" style={iSt} placeholder="Obligatorio" autoComplete="off"
-                    value={cliente.nombreCliente} onChange={onNombreCli}
-                    onBlur={() => lsSet('nombreCliente', cliente.nombreCliente)} />
+            <fieldset style={fsSt({ marginBottom: '10px', padding: '20px' })}>
+              <legend style={lgSt}>Información del Cliente</legend>
+              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '20px', marginBottom: '15px' }}>
+                <div style={{ position: 'relative' }}>
+                  <label style={lSt}>Nombre / Razón Social</label>
+                  <input type="text" style={iSt} className="factura-input" value={cliente.nombreCliente} onChange={onNombreCli} placeholder="Nombre completo..." />
                   {showCli && (
-                    <ul style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 20, background: '#fff', border: '1px solid #ddd', listStyle: 'none', padding: 0, margin: 0, maxHeight: '150px', overflowY: 'auto' }}>
+                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100, background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', marginTop: '5px', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', overflow: 'hidden', maxHeight: '200px', overflowY: 'auto' }}>
                       {sugCli.map((c, i) => (
-                        <li key={i} onMouseDown={() => pickCli(c)}
-                          style={{ padding: '6px 8px', cursor: 'pointer', fontSize: '0.9em' }}
-                          className="hover:bg-gray-100">{c.nombre.toUpperCase()}</li>
+                        <div key={i} onMouseDown={() => pickCli(c)} className="sugerencia-item" style={{ padding: '12px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }}>
+                          <div style={{ fontWeight: '700', fontSize: '0.9em' }}>{c.nombre.toUpperCase()}</div>
+                          <div style={{ fontSize: '0.8em', color: '#64748b' }}>NIT/CC: {c.identificacion}</div>
+                        </div>
                       ))}
-                    </ul>
+                    </div>
                   )}
                 </div>
-                <div style={{ flex: 1 }}>
-                  <label style={lSt}>Cédula o NIT:</label>
-                  <input type="number" style={iSt} placeholder="Obligatorio" autoComplete="off"
-                    value={cliente.cedulaNit} onChange={e => setCliente(p => ({ ...p, cedulaNit: e.target.value }))}
-                    onBlur={() => lsSet('cedulaNit', cliente.cedulaNit)} />
+                <div>
+                  <label style={lSt}>Cédula / NIT</label>
+                  <input type="number" style={iSt} className="factura-input" value={cliente.cedulaNit} onChange={e => setCliente(p => ({ ...p, cedulaNit: e.target.value }))} />
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: '6px', marginBottom: '3px' }}>
-                <div style={{ flex: 1 }}>
-                  <label style={lSt}>Teléfono:</label>
-                  <input type="number" style={iSt} placeholder="Opcional" autoComplete="off"
-                    value={cliente.telefonoCliente} onChange={e => setCliente(p => ({ ...p, telefonoCliente: e.target.value }))}
-                    onBlur={() => lsSet('telefonoCliente', cliente.telefonoCliente)} />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '15px' }}>
+                <div>
+                  <label style={lSt}>Teléfono</label>
+                  <input type="text" style={iSt} className="factura-input" placeholder="Ej: 310... (Opcional)" value={cliente.telefonoCliente} onChange={e => setCliente(p => ({ ...p, telefonoCliente: e.target.value }))} />
                 </div>
-                <div style={{ flex: 1 }}>
-                  <label style={lSt}>Dirección:</label>
-                  <input type="text" style={iSt} placeholder="Opcional" autoComplete="off"
-                    value={cliente.direccionCliente} onChange={e => setCliente(p => ({ ...p, direccionCliente: e.target.value }))}
-                    onBlur={() => lsSet('direccionCliente', cliente.direccionCliente)} />
+                <div>
+                  <label style={lSt}>Dirección</label>
+                  <input type="text" style={iSt} className="factura-input" placeholder="Calle, Barrio... (Opcional)" value={cliente.direccionCliente} onChange={e => setCliente(p => ({ ...p, direccionCliente: e.target.value }))} />
                 </div>
               </div>
               <div>
-                <label style={lSt}>Correo Electrónico:</label>
-                <input type="email" style={iSt} placeholder="Opcional" autoComplete="off"
-                  value={cliente.correoCliente} onChange={e => setCliente(p => ({ ...p, correoCliente: e.target.value }))}
-                  onBlur={() => lsSet('correoCliente', cliente.correoCliente)} />
+                <label style={lSt}>Correo Electrónico</label>
+                <input type="email" style={iSt} className="factura-input" placeholder="cliente@ejemplo.com (Opcional)" value={cliente.correoCliente} onChange={e => setCliente(p => ({ ...p, correoCliente: e.target.value }))} />
               </div>
             </fieldset>
 
-            {/* ── Datos de facturación ── */}
-            <fieldset style={fsSt({ flexShrink: 0 })}>
-              <legend style={lgSt}>Datos de Facturación</legend>
-              {/* Nombre producto + ver costo */}
-              <div style={{ display: 'flex', gap: '6px', marginBottom: '3px' }}>
-                <div style={{ flex: '0 0 66%', position: 'relative' }}>
-                  <label style={lSt}>Nombre del Producto:</label>
-                  <input type="text" style={iSt} autoComplete="off" value={prod.nombre} onChange={onNombreProd} />
+            {/* Producto Section */}
+            <fieldset style={fsSt({ marginBottom: 0, padding: '20px' })}>
+              <legend style={lgSt}>Agregar Producto</legend>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 140px', gap: '15px', marginBottom: '15px', alignItems: 'flex-end' }}>
+                <div style={{ position: 'relative' }}>
+                  <label style={lSt}>Buscador de Productos</label>
+                  <div style={{ position: 'relative' }}>
+                    <Search size={18} style={{ position: 'absolute', left: '15px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                    <input type="text" style={{ ...iSt, paddingLeft: '45px' }} className="factura-input" placeholder="Nombre o código..." value={prod.nombre} onChange={onNombreProd} />
+                  </div>
                   {showProd && (
-                    <ul style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 20, background: '#fff', border: '1px solid #ddd', listStyle: 'none', padding: 0, margin: 0, maxHeight: '150px', overflowY: 'auto' }}>
+                    <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100, background: '#fff', border: '1px solid #e2e8f0', borderRadius: '12px', marginTop: '5px', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', overflow: 'hidden', maxHeight: '200px', overflowY: 'auto' }}>
                       {sugProd.map((p, i) => (
-                        <li key={i} onMouseDown={() => pickProd(p)}
-                          style={{ padding: '5px 8px', cursor: 'pointer', fontSize: '0.85em', borderBottom: '1px solid #eee' }}
-                          className="hover:bg-gray-100">
-                          <span style={{ fontWeight: 500 }}>{p.nombre.toUpperCase()}</span>
-                          <i style={{ color: '#666' }}> || P.C <span style={{ color: 'red' }}>${formatNumber(p.precioComprado)}</span></i>
-                          <i style={{ color: '#666' }}> || P.V ${formatNumber(p.precioVendido)}</i>
-                          {p.precioMayorista > 0 && <i style={{ color: 'blue' }}> || MAY ${formatNumber(p.precioMayorista)}</i>}
-                        </li>
+                        <div key={i} onMouseDown={() => pickProd(p)} className="sugerencia-item" style={{ padding: '12px', cursor: 'pointer', borderBottom: '1px solid #f1f5f9' }}>
+                          <div style={{ fontWeight: '700' }}>{p.nombre.toUpperCase()}</div>
+                          <div style={{ fontSize: '0.85em', color: '#10b981', fontWeight: '600' }}>Precio: ${formatNumber(p.precioVendido)} | Stock: {p.cantidad}</div>
+                        </div>
                       ))}
-                    </ul>
+                    </div>
                   )}
                 </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '3px' }}>
-                    <input type="checkbox" id="verCosto" checked={verCosto} onChange={e => setVerCosto(e.target.checked)} style={{ cursor: 'pointer' }} />
-                    <label htmlFor="verCosto" style={{ fontSize: '0.85em', cursor: 'pointer', userSelect: 'none' }}>Ver costo</label>
-                  </div>
-                  <input type="text" style={{ ...iSt, WebkitTextSecurity: verCosto ? 'none' : 'disc' }} autoComplete="off"
-                    value={prod.pc} onChange={e => setProd(p => ({ ...p, pc: e.target.value }))} />
-                </div>
-              </div>
-              {/* Precio + Cantidad + Garantía */}
-              <div style={{ display: 'flex', gap: '6px', marginBottom: '3px' }}>
-                <div style={{ flex: 1 }}>
-                  <label style={lSt}>Precio Venta:</label>
-                  <input type="text" style={iSt} autoComplete="off" value={prod.precio} onChange={e => setProd(p => ({ ...p, precio: e.target.value }))} />
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '3px' }}>
-                    <input type="checkbox" id="mayoreo" checked={mayoreo} onChange={e => onMayoreo(e.target.checked)} style={{ cursor: 'pointer' }} />
-                    <label htmlFor="mayoreo" style={{ fontSize: '0.85em', cursor: 'pointer', userSelect: 'none' }}>Mayoreo</label>
+
+                <div>
+                  <label style={lSt}>Costo</label>
+                  <div style={{ ...iSt, height: '42px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#f8fafc', borderStyle: 'dotted', padding: '0 10px' }}>
+                    <span style={{ fontSize: '0.9em', fontWeight: '800', filter: verCosto ? 'none' : 'blur(4px)', transition: '0.3s' }}>
+                      {prodSel && verCosto ? `$${prod.pc}` : '$ *****'}
+                    </span>
+                    <button onClick={() => setVerCosto(!verCosto)} style={{ border: 'none', background: 'none', color: '#3b82f6', cursor: 'pointer', padding: 0 }}>
+                      {verCosto ? <ShoppingBag size={14} /> : <Search size={14} />}
+                    </button>
                   </div>
                 </div>
-                <div style={{ flex: 1 }}>
-                  <label style={lSt}>Cantidad:</label>
-                  <input type="number" style={iSt} min="1" max={maxCant ?? undefined} autoComplete="off"
-                    value={prod.cantidad} onChange={e => setProd(p => ({ ...p, cantidad: e.target.value }))} />
-                  {maxCant !== null && <p style={{ color: 'red', fontSize: '0.85em', margin: '2px 0 0' }}>Cantidad máxima disponible: {maxCant}</p>}
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 0.6fr 0.6fr', gap: '15px', marginBottom: '15px' }}>
+                <div>
+                  <label style={lSt}>Precio Venta</label>
+                  <input type="text" style={iSt} className="factura-input" value={prod.precio} onChange={e => setProd(p => ({ ...p, precio: e.target.value }))} />
+                  <label style={{ ...lSt, marginTop: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8em' }}>
+                    <input type="checkbox" checked={mayoreo} onChange={e => onMayoreo(e.target.checked)} /> Aplicar Mayoreo
+                  </label>
                 </div>
-                <div style={{ flex: 1 }}>
-                  <label style={lSt}>Garantía (meses):</label>
-                  <input type="number" style={iSt} autoComplete="off" value={prod.garantia} onChange={e => setProd(p => ({ ...p, garantia: e.target.value }))} />
+                <div>
+                  <label style={lSt}>Cantidad</label>
+                  <input type="number" style={iSt} className="factura-input" value={prod.cantidad} onChange={e => setProd(p => ({ ...p, cantidad: e.target.value }))} />
+                </div>
+                <div>
+                  <label style={lSt}>Garantía</label>
+                  <input type="number" style={iSt} className="factura-input" value={prod.garantia} onChange={e => setProd(p => ({ ...p, garantia: e.target.value }))} />
                 </div>
               </div>
-              {/* Descripción */}
-              <div style={{ marginBottom: '3px' }}>
-                <label style={lSt}>Descripción:</label>
-                <textarea style={{ ...iSt, resize: 'none' }} rows={1} placeholder="Opcional" autoComplete="off"
-                  value={prod.descripcion} onChange={e => setProd(p => ({ ...p, descripcion: e.target.value.toUpperCase() }))} />
+              <div style={{ marginBottom: '15px' }}>
+                <label style={lSt}>Descripción del Producto</label>
+                <textarea style={{ ...iSt, resize: 'none', height: '60px' }} className="factura-input" placeholder="Detalles adicionales, estado del producto, etc. (Opcional)" value={prod.descripcion} onChange={e => setProd(p => ({ ...p, descripcion: e.target.value }))} />
               </div>
-              {/* Agregar / Limpiar */}
-              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '5px', marginTop: '5px' }}>
-                <button onClick={agregar}
-                  className="bg-blue-600 hover:bg-blue-700 text-white rounded"
-                  style={{ letterSpacing: '1px', fontSize: '0.9em', padding: '6px 12px', flex: 1 }}>
-                  Agregar
-                </button>
-                <button onClick={limpiarProd}
-                  className="bg-gray-500 hover:bg-gray-600 text-white rounded"
-                  style={{ letterSpacing: '1px', fontSize: '0.9em', padding: '6px 12px', flex: 1 }}>
-                  Limpiar
-                </button>
-              </div>
+              <button onClick={agregar} className="action-btn" style={{ width: '100%', background: '#3b82f6', color: '#fff', height: '44px', fontSize: '0.9em' }}>
+                <Plus size={18} /> AÑADIR A LA LISTA
+              </button>
             </fieldset>
           </div>
 
-          {/* ── RIGHT COLUMN ─────────────────────────────────────────── */}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+          {/* ── RIGHT COLUMN: CART ── */}
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            <h2 style={{ fontSize: '1.2em', fontWeight: '800', color: 'transparent', margin: '0 0 20px 0', userSelect: 'none' }}>.</h2>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', backgroundColor: '#fff', border: '1px solid #e2e8f0', borderRadius: '16px', overflow: 'hidden' }}>
+              
+              <div style={{ padding: '20px 25px', borderBottom: '1px solid #f1f5f9', display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#fff' }}>
+                <h2 style={{ fontSize: '1.1em', fontWeight: '800', color: '#0f172a', margin: 0 }}>Carrito de Venta</h2>
+                <span style={{ fontSize: '0.75em', color: '#64748b', fontWeight: '800', backgroundColor: '#f1f5f9', padding: '4px 10px', borderRadius: '6px' }}>{carrito.length} ÍTEMS</span>
+              </div>
 
-            <h2 style={{ fontSize: '1.3em', fontWeight: 600, textAlign: 'center', userSelect: 'none', margin: '10px 0 4px', flexShrink: 0 }}>
-              Productos seleccionados
-            </h2>
-
-            {/* Table area — scrolls internally if needed */}
-            <div style={{ overflowY: 'auto', padding: '0 8px', minHeight: 0 }}>
-              <h5 style={{ fontSize: '1em', marginBottom: '4px' }}> Tabla de Productos Seleccionados</h5>
-              <table className="factura-table" style={{ width: '100%', borderCollapse: 'collapse', border: '1px solid #dee2e6', fontSize: '0.9rem' }}>
-                <thead>
-                  <tr style={{ backgroundColor: '#f1f3f5' }}>
-                    {['Nombre', 'Cant.', 'Precio', 'Dcto%', 'Gtía', 'Descripción', 'Total', 'Acciones'].map(h => (
-                      <th key={h} style={{ border: '1px solid #dee2e6', padding: '5px 6px', fontWeight: 600, fontSize: '0.88em' }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {carrito.map((item, idx) => (
-                    <tr key={idx} style={item.descuento > 0 ? { backgroundColor: '#d4edda', borderLeft: '2px solid #28a745' } : {}}>
-                      <td style={{ border: '1px solid #dee2e6', padding: '5px 6px', width: '220px', minWidth: '220px', maxWidth: '220px' }}>
-                        <div title={item.nombre} style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', cursor: 'help', lineHeight: '1.2' }}>
-                          {item.nombre}
+              <div className="scroll-custom" style={{ flex: 1, overflowY: 'auto', padding: '20px 25px', backgroundColor: '#fcfcfc' }}>
+                {carrito.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '100px 0', color: '#94a3b8', fontSize: '0.9em' }}>
+                    No hay productos en la lista
+                  </div>
+                ) : (
+                  carrito.map((item, idx) => (
+                    <div key={idx} className="cart-card">
+                      <div>
+                        <div style={{ fontWeight: '800', color: '#0f172a', fontSize: '1.05em', marginBottom: '4px' }}>{item.nombre.toUpperCase()}</div>
+                        <div style={{ fontSize: '0.78em', color: '#94a3b8', marginBottom: '8px' }}>{item.descripcion || 'Sin descripción'}</div>
+                        <div style={{ fontSize: '0.85em', color: '#3b82f6', fontWeight: '700' }}>
+                          {item.cantidad} x {item.descuento > 0 ? (
+                            <>
+                              <span style={{ textDecoration: 'line-through', color: '#94a3b8', marginRight: '5px', fontWeight: '500' }}>${item.precioOriginal.toLocaleString()}</span>
+                              <span style={{ color: '#db2777' }}>${item.precioUnitario.toLocaleString()}</span>
+                            </>
+                          ) : (
+                            `$${item.precioUnitario.toLocaleString()}`
+                          )}
+                          <span style={{ color: '#94a3b8', fontWeight: '500', marginLeft: '10px' }}>Gtz: {item.garantia}m</span>
+                          <span style={{ marginLeft: '12px', display: 'inline-flex', alignItems: 'center', gap: '4px', backgroundColor: '#fdf2f8', padding: '2px 6px', borderRadius: '6px', border: '1px solid #fce7f3' }}>
+                            <Tag size={11} color="#db2777" />
+                            <input type="number" className="cart-input-mini" style={{ width: '35px', height: '22px', fontSize: '0.75em', border: 'none', background: 'transparent', padding: 0 }} 
+                              min="0"
+                              value={item.descuento === undefined ? 0 : item.descuento} 
+                              placeholder="0"
+                              onChange={(e) => {
+                                const val = parseFloat(e.target.value) || 0;
+                                const pct = Math.max(0, val);
+                                setCarrito(prev => prev.map((it, i) => {
+                                  if (i !== idx) return it;
+                                  const pr = it.precioOriginal * (1 - pct / 100);
+                                  return { ...it, descuento: pct, precioUnitario: pr, total: pr * it.cantidad };
+                                }));
+                              }}
+                            />
+                            <span style={{ fontSize: '0.75em', color: '#db2777', fontWeight: '700' }}>% OFF</span>
+                          </span>
                         </div>
-                      </td>
-                      <td style={{ border: '1px solid #dee2e6', padding: '5px 6px', textAlign: 'center' }}>{item.cantidad}</td>
-                      <td style={{ border: '1px solid #dee2e6', padding: '5px 6px', textAlign: 'right' }}>{item.precioUnitario.toLocaleString('es-CO', { minimumFractionDigits: 0 })}</td>
-                      <td style={{ border: '1px solid #dee2e6', padding: '3px', textAlign: 'center' }}>
-                        <input type="number" min="0" max="20"
-                          style={{ width: '52px', fontSize: '0.8em', padding: '2px 4px', textAlign: 'center', border: '1px solid #ccc', borderRadius: '4px' }}
-                          value={item.descuento} onChange={e => descInd(idx, parseFloat(e.target.value) || 0)} />
-                      </td>
-                      <td style={{ border: '1px solid #dee2e6', padding: '5px 6px', textAlign: 'center' }}>{item.garantia}</td>
-                      <td title={item.descripcion} style={{ border: '1px solid #dee2e6', padding: '5px 6px', maxWidth: '120px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'help' }}>{item.descripcion}</td>
-                      <td style={{ border: '1px solid #dee2e6', padding: '5px 6px', textAlign: 'right', fontWeight: 500 }}>{item.total.toLocaleString('es-CO', { minimumFractionDigits: 0 })}</td>
-                      <td style={{ border: '1px solid #dee2e6', padding: '3px 5px', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                        <button onClick={() => eliminar(idx)} className="bg-red-600 hover:bg-red-700 text-white rounded"
-                          style={{ fontSize: '0.8em', padding: '2px 7px', marginRight: '2px' }}>Eliminar</button>
-                        <button onClick={() => editar(idx)} className="bg-yellow-500 hover:bg-yellow-600 text-white rounded"
-                          style={{ fontSize: '0.8em', padding: '2px 7px' }}>Editar</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                      </div>
+                      <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                        <div style={{ fontWeight: '800', color: '#000', fontSize: '1.1em' }}>${Math.round(item.total).toLocaleString()}</div>
+                        <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                          <button onClick={() => editar(idx)} className="btn-icon-sm" style={{ background: '#f1f5f9', color: '#64748b' }}><Edit size={14} /></button>
+                          <button onClick={() => eliminar(idx)} className="btn-icon-sm" style={{ background: '#fef2f2', color: '#ef4444' }}><Trash2 size={14} /></button>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
 
-            {/* Total + descuento general — fixed at bottom of right col */}
-            <div style={{ flexShrink: 0, padding: '4px 8px 0' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3px' }}>
-                <h6 style={{ margin: 0, fontSize: '0.95em', fontWeight: 'bold' }}>
-                  TOTAL: <span style={{ color: 'red' }}>${totalCarrito.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
-                </h6>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <small style={{ fontSize: '0.8em', color: '#6c757d' }}>Dcto a todos:</small>
-                  <input type="number" min="0" max="20" placeholder="0" autoComplete="off"
-                    style={{ width: '50px', fontSize: '0.8em', padding: '2px 5px', border: '1px solid #ccc', borderRadius: '4px' }}
-                    value={descGen} onChange={e => setDescGen(e.target.value)} />
-                  <small style={{ fontSize: '0.8em', color: '#6c757d' }}>%</small>
-                  <button onClick={applyDescGen} title="Aplicar a todos"
-                    className="bg-green-600 hover:bg-green-700 text-white rounded"
-                    style={{ fontSize: '0.75em', padding: '2px 8px' }}>✓</button>
-                  <button onClick={removeDescGen} title="Quitar descuento"
-                    className="bg-gray-500 hover:bg-gray-600 text-white rounded"
-                    style={{ fontSize: '0.75em', padding: '2px 8px' }}>✕</button>
+              {/* Action Area - Perfectly Level with Left Side */}
+              <div style={{ background: '#fff' }}>
+                <div style={{ padding: '15px 25px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {ahorroTotal > 0 && (
+                      <div style={{ fontSize: '0.8em', fontWeight: '800', color: '#10b981', marginLeft: '2px' }}>
+                        AHORRAS: ${Math.round(ahorroTotal).toLocaleString('es-CO')} ({Math.round(ahorroPorc)}%)
+                      </div>
+                    )}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Tag size={18} color="#94a3b8" />
+                      <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                        <input type="number" className="cart-input-mini" value={descGen === '' ? 0 : descGen} placeholder="0" onChange={e => setDescGen(e.target.value)} style={{ width: '60px', height: '32px', fontSize: '0.9em', paddingRight: '20px' }} />
+                        <span style={{ position: 'absolute', right: '8px', fontSize: '0.8em', fontWeight: '800', color: '#94a3b8', pointerEvents: 'none' }}>%</span>
+                      </div>
+                      <div style={{ display: 'flex', gap: '4px' }}>
+                        <button onClick={applyDescGen} style={{ background: '#10b981', color: '#fff', border: 'none', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', fontSize: '0.72em', fontWeight: '800' }}>APLICAR</button>
+                        {parseFloat(descGen) > 0 || ahorroTotal > 0 ? (
+                          <button onClick={removeDescGen} style={{ background: '#f1f5f9', color: '#64748b', border: 'none', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', fontSize: '0.72em', fontWeight: '800' }}>QUITAR</button>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    {ahorroTotal > 0 && (
+                      <div style={{ fontSize: '0.85em', fontWeight: '700', color: '#94a3b8', marginBottom: '2px', textDecoration: 'line-through' }}>
+                        NORMAL: ${Math.round(totalSinDesc).toLocaleString('es-CO')}
+                      </div>
+                    )}
+                    <div style={{ fontSize: '0.75em', fontWeight: '800', color: '#64748b', marginBottom: '4px' }}>TOTAL A COBRAR</div>
+                    <div style={{ fontSize: '2.1em', fontWeight: '900', color: ahorroTotal > 0 ? '#10b981' : '#000', letterSpacing: '-1px', lineHeight: 1 }}>
+                      ${totalCarrito.toLocaleString('es-CO')}
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ padding: '0 25px 20px 25px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.2fr) minmax(0, 1fr) 50px', gap: '12px' }}>
+                    {!esPrest ? (
+                      <>
+                        <button onClick={imprimirPOS} className="action-btn" style={{ background: '#10b981', color: '#fff', height: '48px' }}>
+                          <Printer size={18} /> TICKET POS
+                        </button>
+                        <button onClick={guardarPDF} className="action-btn" style={{ background: '#fff', border: '1px solid #ef4444', color: '#ef4444', height: '48px' }}>
+                          <FileText size={18} /> FACTURA PDF
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button onClick={imprimirPOSPrest} className="action-btn" style={{ background: '#f59e0b', color: '#fff', height: '48px' }}>
+                          <Printer size={18} /> IMPRIMIR {tipDoc}
+                        </button>
+                        <button onClick={guardarPDFPrest} className="action-btn" style={{ background: '#fff', border: '1px solid #f59e0b', color: '#f59e0b', height: '48px' }}>
+                          <FileText size={18} /> FACTURA PDF
+                        </button>
+                      </>
+                    )}
+                    <button onClick={limpiarTodo} className="action-btn" style={{ background: '#1e293b', color: '#fff', height: '48px', padding: 0 }}>
+                      <XCircle size={22} />
+                    </button>
+                  </div>
                 </div>
               </div>
-              {montoDesc > 0 && (
-                <small style={{ color: '#28a745', fontSize: '0.8em', marginLeft: '4px' }}>
-                  Descuento total: -${montoDesc.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
-                </small>
-              )}
-            </div>
-
-            {/* ── Botones de impresión — idénticos al original */}
-            <div style={{ flexShrink: 0, textAlign: 'center', margin: 0, padding: '8px 0 14px' }}>
-              {!esPrest ? (
-                <>
-                  <button onClick={imprimirPOS} className="bg-green-600 hover:bg-green-700 text-white rounded"
-                    style={{ width: '300px', letterSpacing: '2px', padding: '6px 12px', marginRight: '4px' }}>
-                    Imprimir Pos
-                  </button>
-                  <button onClick={guardarPDF} className="border border-red-500 text-red-600 hover:bg-red-50 rounded bg-white"
-                    style={{ letterSpacing: '1px', padding: '6px 12px', marginRight: '4px' }}>
-                    Guardar Factura PDF
-                  </button>
-                  <button onClick={limpiarTodo} className="bg-gray-800 hover:bg-gray-900 text-white rounded"
-                    style={{ letterSpacing: '1px', padding: '6px 12px' }}>
-                    Cancelar
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button onClick={imprimirPOSPrest} className="bg-yellow-500 hover:bg-yellow-600 text-white rounded"
-                    style={{ width: '300px', letterSpacing: '2px', padding: '6px 12px', marginRight: '4px' }}>
-                    Imprimir Pos
-                  </button>
-                  <button onClick={guardarPDFPrest} className="border border-yellow-500 text-yellow-700 hover:bg-yellow-50 rounded bg-white"
-                    style={{ letterSpacing: '1px', padding: '6px 12px', marginRight: '4px' }}>
-                    Guardar Factura PDF
-                  </button>
-                  <button onClick={limpiarTodo} className="bg-gray-800 hover:bg-gray-900 text-white rounded"
-                    style={{ letterSpacing: '1px', padding: '6px 12px' }}>
-                    Cancelar
-                  </button>
-                </>
-              )}
             </div>
           </div>
+
         </div>
       </div>
 
-      <ConfirmModal open={!!confirm} mensaje={confirm?.mensaje || ''} textoAceptar="Aceptar" textoCancelar="Volver"
+      <ConfirmModal open={!!confirm} mensaje={confirm?.mensaje || ''} textoAceptar="PROCESAR" textoCancelar="VOLVER"
         onAceptar={confirm?.onAceptar} onCancelar={() => setConfirm(null)} />
     </>
   );

@@ -29,7 +29,7 @@ export default function Navbar() {
       className="fixed top-0 left-0 right-0 z-40 h-[55px] flex items-center px-4"
       style={{ backgroundColor: '#343a40' }}
     >
-      <nav className="w-full flex items-center justify-between">
+      <nav className="w-full flex items-center justify-evenly">
         {/* Brand */}
         <h6
           className="text-white font-black text-2xl select-none ml-4 whitespace-nowrap"
