@@ -30,7 +30,7 @@ export default function App() {
             <Route path="/config" element={<Config />} />
           </Routes>
         </main>
-        <Toaster richColors position="bottom-right" />
+        <Toaster richColors position="top-right" offset="80px" />
       </div>
     </BrowserRouter>
   );

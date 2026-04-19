@@ -35,7 +35,7 @@ export default function Navbar() {
           className="text-white font-black text-2xl select-none ml-4 whitespace-nowrap"
           style={{ fontSize: '1.7em', fontWeight: 900 }}
         >
-          Gestión Total
+          Zentory
         </h6>
 
         {/* Nav icons */}
