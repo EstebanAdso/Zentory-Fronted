@@ -428,12 +428,46 @@ export default function Facturacion() {
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '20px', marginTop: '20px' }}>
               <fieldset style={fsSt({ marginBottom: 0, padding: '20px' })}>
                 <legend style={lgSt}>Configuración de Venta</legend>
-                <label style={lSt}>Tipo de Documento</label>
-                <select style={{ ...iSt, background: '#f8fafc' }} value={tipDoc} onChange={e => { setTipDoc(e.target.value); setEsPrest(e.target.value === 'FACTURA' ? false : true); }}>
-                  <option value="FACTURA">📄 Factura de Venta</option>
-                  <option value="PRESTAMO">🤝 Préstamo (Fiado)</option>
-                  <option value="APARTADO">🏷️ Apartado (Separar)</option>
-                </select>
+                <div style={{ display: 'grid', gridTemplateColumns: tipDoc === 'APARTADO' ? '1fr 1fr' : '1fr', gap: '20px' }}>
+                  <div>
+                    <label style={lSt}>Tipo de Documento</label>
+                    <select style={{ ...iSt, background: '#f8fafc' }} value={tipDoc} onChange={e => { const v = e.target.value; setTipDoc(v); setEsPrest(v !== 'FACTURA'); if (v !== 'APARTADO') setAbono(''); }}>
+                      <option value="FACTURA">📄 Factura de Venta</option>
+                      <option value="PRESTAMO">🤝 Préstamo (Fiado)</option>
+                      <option value="APARTADO">🏷️ Apartado (Separar)</option>
+                    </select>
+                  </div>
+                  {tipDoc === 'APARTADO' && (
+                    <div>
+                      <label style={lSt}>
+                        Abono Inicial <span style={{ color: '#ef4444' }}>*</span>
+                      </label>
+                      <input
+                        type="text"
+                        style={iSt}
+                        className="factura-input"
+                        placeholder="$0"
+                        value={abono}
+                        onChange={e => {
+                          const raw = parseFormattedNumber(e.target.value);
+                          setAbono(isNaN(raw) || raw === 0 ? '' : formatNumber(raw));
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+                {esPrest && (
+                  <div style={{ marginTop: '15px' }}>
+                    <label style={lSt}>Observaciones</label>
+                    <textarea
+                      style={{ ...iSt, resize: 'none', height: '60px' }}
+                      className="factura-input"
+                      placeholder="Notas adicionales... (Opcional)"
+                      value={obs}
+                      onChange={e => setObs(e.target.value)}
+                    />
+                  </div>
+                )}
               </fieldset>
 
               <fieldset style={fsSt({ marginBottom: 0, padding: '20px' })}>
