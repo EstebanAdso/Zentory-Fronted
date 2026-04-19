@@ -1,6 +1,13 @@
 // ── Print helpers ──────────────────────────────────────────────────────────
 // Opens a new window, writes the HTML content, and triggers print.
 
+function triggerPrint(ventana) {
+  // Esperar a que el documento cargue para evitar imprimir antes de renderizar (más fluido).
+  const run = () => { ventana.focus(); ventana.print(); };
+  if (ventana.document.readyState === 'complete') run();
+  else ventana.addEventListener('load', run, { once: true });
+}
+
 export function abrirVentanaImpresion(htmlContent, width = 800, height = 1200) {
   const ventana = window.open('', '', `height=${height},width=${width}`);
   ventana.document.write(`
@@ -19,8 +26,7 @@ export function abrirVentanaImpresion(htmlContent, width = 800, height = 1200) {
     </html>
   `);
   ventana.document.close();
-  ventana.focus();
-  ventana.print();
+  triggerPrint(ventana);
 }
 
 export function abrirVentanaPOS(htmlContent) {
@@ -31,7 +37,7 @@ export function abrirVentanaPOS(htmlContent) {
         <title>Factura POS</title>
         <style>
           @page { margin: 0; padding: 0; }
-          body { font-family: Arial, Helvetica, sans-serif; margin: 0; padding: 0; color: #000 !important; }
+          body { font-family: Arial, Helvetica, sans-serif; margin: 0; padding: 0; color: #000 !important; -webkit-print-color-adjust: exact; }
           table { width: 100%; border-collapse: collapse; color: #000 !important; }
           th, td { padding: 2px 0; text-align: right; color: #000 !important; }
           th { text-align: center; }
@@ -42,8 +48,7 @@ export function abrirVentanaPOS(htmlContent) {
     </html>
   `);
   ventana.document.close();
-  ventana.focus();
-  ventana.print();
+  triggerPrint(ventana);
 }
 
 // ── Invoice HTML templates ─────────────────────────────────────────────────

@@ -80,13 +80,17 @@ export const eliminarFactura = (id) => api.delete(`/api/facturas/${id}`);
 
 // ── Préstamos ─────────────────────────────────────────────────────────────
 export const getPrestamos = () => api.get('/api/prestamos');
+export const getPrestamo = (id) => api.get(`/api/prestamos/${id}`);
+export const getPrestamoDetalles = (id) => api.get(`/api/prestamos/${id}/detalles`);
+export const getPrestamoAbonos = (id) => api.get(`/api/prestamos/${id}/abonos`);
 export const getPrestamosPendientes = () => api.get('/api/prestamos/pendientes');
 export const getPrestamosPorEstado = (estado) =>
   api.get(`/api/prestamos/estado/${estado}`);
 export const crearPrestamo = (data) => api.post('/api/prestamos/crear', data);
 export const actualizarPrestamo = (id, data) => api.put(`/api/prestamos/${id}`, data);
-export const agregarAbono = (id, data) => api.post(`/api/prestamos/${id}/abono`, data);
+export const agregarAbono = (data) => api.post('/api/prestamos/abono', data);
 export const eliminarPrestamo = (id) => api.delete(`/api/prestamos/${id}`);
+export const anularPrestamo = (id) => api.post(`/api/prestamos/${id}/anular`);
 export const convertirPrestamoAFactura = (id) =>
   api.post(`/api/prestamos/${id}/convertir-factura`);
 
