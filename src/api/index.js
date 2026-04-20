@@ -51,7 +51,10 @@ export const actualizarCategoria = (id, data) => api.put(`/categoria/${id}`, dat
 export const eliminarCategoria = (id) => api.delete(`/categoria/${id}`);
 
 // ── Clientes ──────────────────────────────────────────────────────────────
-export const getClientes = () => api.get('/cliente');
+export const getClientes = (page = 0, size = 20) =>
+  api.get(`/cliente?page=${page}&size=${size}`);
+export const buscarClientes = (query, page = 0, size = 20) =>
+  api.get(`/cliente/buscar?query=${encodeURIComponent(query)}&page=${page}&size=${size}`);
 export const crearCliente = (data) => api.post('/cliente', data);
 export const actualizarCliente = (id, data) => api.put(`/cliente/${id}`, data);
 export const getClienteSugerencias = (query) =>

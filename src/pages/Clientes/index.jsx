@@ -1,12 +1,12 @@
-import { useState, useEffect, useMemo, useCallback, memo } from 'react';
+import { useState, useEffect, useCallback, memo } from 'react';
 import { toast } from 'sonner';
 import {
   Plus, Pencil, Search, Trophy, X, RefreshCw, Users, Award,
-  IdCard, Phone, MapPin, Mail,
+  IdCard, Phone, MapPin, Mail, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import { formatNumber } from '../../utils/formatters';
 import {
-  getClientes, crearCliente, actualizarCliente, getTopClientes,
+  getClientes, buscarClientes, crearCliente, actualizarCliente, getTopClientes,
 } from '../../api';
 
 // ── Fila de tabla ───────────────────────────────────────────────────────────
@@ -75,6 +75,12 @@ export default function Clientes() {
   const [clientes, setClientes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busqueda, setBusqueda] = useState('');
+  const [debouncedBusqueda, setDebouncedBusqueda] = useState('');
+
+  const [currentPage, setCurrentPage] = useState(0);
+  const [pageSize, setPageSize] = useState(20);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
 
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -85,30 +91,36 @@ export default function Clientes() {
   const [top, setTop] = useState([]);
   const [loadingTop, setLoadingTop] = useState(false);
 
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedBusqueda(busqueda.trim()), 300);
+    return () => clearTimeout(t);
+  }, [busqueda]);
+
   const cargarClientes = useCallback(async () => {
     setLoading(true);
     try {
-      const { data } = await getClientes();
-      const lista = Array.isArray(data) ? data : (data?.content ?? []);
-      lista.sort((a, b) => b.id - a.id);
-      setClientes(lista);
+      const req = debouncedBusqueda
+        ? buscarClientes(debouncedBusqueda, currentPage, pageSize)
+        : getClientes(currentPage, pageSize);
+      const { data } = await req;
+      if (Array.isArray(data)) {
+        const ordenada = [...data].sort((a, b) => b.id - a.id);
+        setClientes(ordenada);
+        setTotalPages(1);
+        setTotalElements(ordenada.length);
+      } else {
+        setClientes(data?.content ?? []);
+        setTotalPages(data?.totalPages ?? 0);
+        setTotalElements(data?.totalElements ?? 0);
+      }
     } catch {
       toast.error('Error al cargar los clientes.');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentPage, pageSize, debouncedBusqueda]);
 
   useEffect(() => { cargarClientes(); }, [cargarClientes]);
-
-  const clientesFiltrados = useMemo(() => {
-    const q = busqueda.trim().toLowerCase();
-    if (!q) return clientes;
-    return clientes.filter((c) =>
-      (c.nombre || '').toLowerCase().includes(q) ||
-      (c.identificacion || '').toLowerCase().includes(q)
-    );
-  }, [clientes, busqueda]);
 
   const abrirAgregar = () => {
     setEditingId(null);
@@ -222,9 +234,9 @@ export default function Clientes() {
         <div className="max-w-[1800px] mx-auto w-full h-full flex flex-col gap-4">
           {/* Stats + search — fixed */}
           <div className="shrink-0 grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Stat icon={Users} title="Clientes registrados" value={clientes.length}
+            <Stat icon={Users} title="Clientes registrados" value={totalElements}
               accent="bg-blue-50 text-blue-600" />
-            <Stat icon={Search} title="Coincidencias" value={clientesFiltrados.length}
+            <Stat icon={Search} title="Coincidencias" value={debouncedBusqueda ? totalElements : clientes.length}
               accent="bg-cyan-50 text-cyan-600" />
           </div>
 
@@ -234,16 +246,16 @@ export default function Clientes() {
               <input
                 type="text"
                 value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value.toUpperCase())}
-                placeholder="Buscar por nombre o identificación..."
+                onChange={(e) => { setBusqueda(e.target.value.toUpperCase()); setCurrentPage(0); }}
+                placeholder="Buscar por nombre, identificación, teléfono o correo..."
                 className="w-full bg-white border border-slate-200 rounded-lg pl-10 pr-3 h-10 text-sm outline-none focus:border-[#4488ee] focus:ring-2 focus:ring-[#4488ee]/20 shadow-sm transition-all"
               />
             </div>
           </div>
 
           {/* Tabla — fills remaining space, scrolls internally */}
-          <div className="flex-1 min-h-0 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="h-full overflow-auto">
+          <div className="flex-1 min-h-0 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+            <div className="flex-1 min-h-0 overflow-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr>
@@ -259,19 +271,84 @@ export default function Clientes() {
                 <tbody>
                   {loading ? (
                     <tr><td colSpan={7} className="text-center text-slate-400 py-12">Cargando clientes…</td></tr>
-                  ) : clientesFiltrados.length === 0 ? (
+                  ) : clientes.length === 0 ? (
                     <tr><td colSpan={7} className="text-center text-slate-400 py-12">
                       <Users size={32} className="mx-auto mb-2 text-slate-300" />
                       {busqueda ? 'Sin coincidencias para la búsqueda' : 'No hay clientes registrados'}
                     </td></tr>
                   ) : (
-                    clientesFiltrados.map((c) => (
+                    clientes.map((c) => (
                       <FilaCliente key={c.id} cliente={c} onEditar={abrirEditar} />
                     ))
                   )}
                 </tbody>
               </table>
             </div>
+
+            {/* Paginación */}
+            {totalPages > 0 && (
+              <div className="shrink-0 border-t border-slate-200 bg-slate-50/60 px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-3 text-xs text-slate-600">
+                  <span>
+                    Mostrando <b className="text-slate-800">{clientes.length}</b> de{' '}
+                    <b className="text-slate-800">{totalElements}</b> clientes
+                  </span>
+                  <label className="flex items-center gap-2">
+                    <span className="text-slate-500">Por página</span>
+                    <select
+                      value={pageSize}
+                      onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(0); }}
+                      className="bg-white border border-slate-200 rounded-md px-2 py-1 text-xs font-semibold text-slate-700 outline-none focus:border-[#4488ee]"
+                    >
+                      <option value={10}>10</option>
+                      <option value={20}>20</option>
+                      <option value={50}>50</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
+                    disabled={currentPage === 0}
+                    className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronLeft size={14} />
+                  </button>
+
+                  {(() => {
+                    const maxVisible = 5;
+                    const half = Math.floor(maxVisible / 2);
+                    let start = Math.max(0, currentPage - half);
+                    let end = Math.min(totalPages - 1, start + maxVisible - 1);
+                    start = Math.max(0, end - maxVisible + 1);
+                    const pages = [];
+                    for (let i = start; i <= end; i++) pages.push(i);
+                    return pages.map((p) => (
+                      <button
+                        key={p}
+                        onClick={() => setCurrentPage(p)}
+                        className={`inline-flex items-center justify-center min-w-[32px] h-8 px-2 rounded-md text-xs font-semibold transition-colors ${
+                          p === currentPage
+                            ? 'bg-[#4488ee] text-white shadow-sm'
+                            : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-100'
+                        }`}
+                      >
+                        {p + 1}
+                      </button>
+                    ));
+                  })()}
+
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))}
+                    disabled={currentPage >= totalPages - 1}
+                    className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronRight size={14} />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </main>
