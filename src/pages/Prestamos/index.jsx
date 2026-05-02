@@ -382,13 +382,24 @@ export default function Prestamos() {
       .catch(() => toast.error('No se pudieron cargar las cuentas de recaudo.'));
   }, []);
 
+  // Búsqueda inteligente multi-token: cada palabra debe aparecer en al menos uno
+  // de los campos. Permite escribir "carlos muñoz" y encontrar "Carlos Realpe Muñoz".
   const prestamosFiltrados = useMemo(() => {
-    const q = busqueda.toLowerCase().trim();
-    if (!q) return prestamos;
-    return prestamos.filter((p) =>
-      (p.clienteNombre || '').toLowerCase().includes(q) ||
-      (p.cliente?.identificacion || '').includes(q)
-    );
+    const tokens = busqueda.toLowerCase().trim().split(/\s+/).filter(Boolean);
+    if (tokens.length === 0) return prestamos;
+    return prestamos.filter((p) => {
+      const haystack = [
+        p.clienteNombre,
+        p.cliente?.nombre,
+        p.cliente?.identificacion,
+        p.serial,
+        p.observaciones,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return tokens.every((t) => haystack.includes(t));
+    });
   }, [prestamos, busqueda]);
 
   const verDetalle = useCallback(async (id) => {
@@ -734,14 +745,14 @@ export default function Prestamos() {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-600 uppercase tracking-wide mb-1.5">Buscar Cliente</label>
+                <label className="block text-xs font-bold text-slate-600 uppercase tracking-wide mb-1.5">Buscar</label>
                 <div className="relative">
                   <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                   <input
                     type="text"
                     value={busqueda}
                     onChange={(e) => setBusqueda(e.target.value)}
-                    placeholder="Nombre o cédula..."
+                    placeholder="Cliente, cédula, serial..."
                     className="w-full pl-9 pr-3 h-10 border-2 border-slate-200 rounded-lg text-sm outline-none focus:border-[#4488ee] focus:ring-2 focus:ring-[#4488ee]/20 transition-all"
                   />
                 </div>
