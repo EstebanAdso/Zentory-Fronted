@@ -2,9 +2,10 @@ import { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { toast } from 'sonner';
 import {
   Plus, Trash2, Pencil, X, RefreshCw, DollarSign, Boxes, Landmark,
+  ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import ConfirmModal from '../../components/ConfirmModal';
-import { formatNumber, parseFormattedNumber } from '../../utils/formatters';
+import { formatNumber, parseFormattedNumber, formatMoneyInput } from '../../utils/formatters';
 import {
   getActivos, crearActivo, actualizarActivo, eliminarActivo,
 } from '../../api';
@@ -87,6 +88,11 @@ export default function Activos() {
   const [activos, setActivos] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const [currentPage, setCurrentPage] = useState(0);
+  const [pageSize, setPageSize] = useState(20);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
+
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(FORM_INICIAL);
@@ -97,17 +103,32 @@ export default function Activos() {
   const cargarActivos = useCallback(async () => {
     setLoading(true);
     try {
-      const { data } = await getActivos();
-      const lista = Array.isArray(data) ? data : (data?.content ?? []);
-      setActivos(lista);
+      const { data } = await getActivos(currentPage, pageSize);
+      if (Array.isArray(data)) {
+        setActivos(data);
+        setTotalPages(1);
+        setTotalElements(data.length);
+      } else {
+        setActivos(data?.content ?? []);
+        setTotalPages(data?.totalPages ?? 0);
+        setTotalElements(data?.totalElements ?? 0);
+      }
     } catch {
       toast.error('Error al cargar los activos.');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentPage, pageSize]);
 
   useEffect(() => { cargarActivos(); }, [cargarActivos]);
+
+  const irAPagina = (page) => {
+    if (page < 0 || page >= totalPages) return;
+    setCurrentPage(page);
+  };
+  const maxVisible = 5;
+  const startPage = Math.max(0, Math.min(currentPage - Math.floor(maxVisible / 2), totalPages - maxVisible));
+  const endPage = Math.min(totalPages - 1, startPage + maxVisible - 1);
 
   const totalGlobal = useMemo(
     () => activos.reduce((s, a) => s + (a.precio * a.cantidad), 0),
@@ -128,7 +149,7 @@ export default function Activos() {
     setEditingId(activo.id);
     setForm({
       nombre: activo.nombre,
-      precio: activo.precio ? Number(activo.precio).toLocaleString('es-CO') : '',
+      precio: formatMoneyInput(activo.precio),
       cantidad: String(activo.cantidad),
     });
     setShowModal(true);
@@ -141,8 +162,7 @@ export default function Activos() {
   };
 
   const onChangeMoney = (e) => {
-    const raw = e.target.value.replace(/[^\d]/g, '');
-    setForm((f) => ({ ...f, precio: raw ? Number(raw).toLocaleString('es-CO') : '' }));
+    setForm((f) => ({ ...f, precio: formatMoneyInput(e.target.value) }));
   };
 
   const guardar = async (e) => {
@@ -226,11 +246,11 @@ export default function Activos() {
         <div className="max-w-[1800px] mx-auto w-full h-full flex flex-col gap-4">
           {/* Stats — fixed */}
           <div className="shrink-0 grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Stat icon={Landmark} title="Activos registrados" value={activos.length}
+            <Stat icon={Landmark} title="Activos registrados" value={totalElements}
               accent="bg-slate-100 text-slate-700" />
-            <Stat icon={Boxes} title="Unidades totales" value={cantidadTotal}
+            <Stat icon={Boxes} title="Unidades en página" value={cantidadTotal}
               accent="bg-cyan-50 text-cyan-600" />
-            <Stat icon={DollarSign} title="Valor total" value={`$${formatNumber(totalGlobal)}`}
+            <Stat icon={DollarSign} title="Valor en página" value={`$${formatNumber(totalGlobal)}`}
               accent="bg-emerald-50 text-emerald-600" />
           </div>
 
@@ -268,6 +288,55 @@ export default function Activos() {
               </table>
             </div>
           </div>
+
+          {/* Paginación */}
+          {!loading && totalElements > 0 && (
+            <div className="shrink-0 flex items-center justify-center gap-6 flex-wrap">
+              <div className="flex items-center gap-2 text-sm text-slate-600">
+                <label className="font-semibold">Mostrar:</label>
+                <select
+                  value={pageSize}
+                  onChange={(e) => { setPageSize(parseInt(e.target.value)); setCurrentPage(0); }}
+                  className="border-2 border-slate-200 rounded-lg px-2 h-9 text-sm outline-none focus:border-[#4488ee] bg-white"
+                >
+                  <option value="10">10</option>
+                  <option value="20">20</option>
+                  <option value="50">50</option>
+                </select>
+                <span className="text-slate-500">por página · Página {currentPage + 1} de {Math.max(1, totalPages)}</span>
+              </div>
+              {totalPages > 1 && (
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => irAPagina(currentPage - 1)}
+                    disabled={currentPage === 0}
+                    className="inline-flex items-center justify-center w-9 h-9 border border-slate-200 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-slate-700 transition-colors"
+                  >
+                    <ChevronLeft size={16} />
+                  </button>
+                  {Array.from({ length: endPage - startPage + 1 }, (_, i) => startPage + i).map((pg) => (
+                    <button
+                      key={pg}
+                      onClick={() => irAPagina(pg)}
+                      className={`inline-flex items-center justify-center w-9 h-9 rounded-lg text-sm font-semibold transition-colors ${pg === currentPage
+                          ? 'bg-[#4488ee] text-white shadow-sm shadow-[#4488ee]/20'
+                          : 'border border-slate-200 hover:bg-slate-100 text-slate-700'
+                        }`}
+                    >
+                      {pg + 1}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => irAPagina(currentPage + 1)}
+                    disabled={currentPage >= totalPages - 1}
+                    className="inline-flex items-center justify-center w-9 h-9 border border-slate-200 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-slate-700 transition-colors"
+                  >
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </main>
 

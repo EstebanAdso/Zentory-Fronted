@@ -209,7 +209,7 @@ export function generarPrestamoHTMLPDF({
       <thead><tr style="background-color:#f2f2f2;">
         <th style="border:1px solid #ddd;padding:6px;">Fecha</th>
         <th style="border:1px solid #ddd;padding:6px;">Monto</th>
-        <th style="border:1px solid #ddd;padding:6px;">Método</th>
+        <th style="border:1px solid #ddd;padding:6px;">Cuenta</th>
         <th style="border:1px solid #ddd;padding:6px;">Observación</th>
       </tr></thead>
       <tbody>${abonosHTML}</tbody>
@@ -276,7 +276,7 @@ export function generarPrestamoHTMLPOS({
 
 export function generarAbonoHTMLPOS({
   prestamoId, tipoDocumento, nombreCliente, cedulaNit, montoAbono,
-  metodoPago, observacion, totalPrestamo, totalAbonado, saldoPendiente,
+  cuentaRecaudo, observacion, totalPrestamo, totalAbonado, saldoPendiente,
   fechaAbono, numeroAbono,
 }) {
   const tipoTexto = tipoDocumento === 'PRESTAMO' ? 'Préstamo' : 'Apartado';
@@ -291,7 +291,7 @@ export function generarAbonoHTMLPOS({
       <p style="margin-bottom:0px"><strong>Cliente:</strong> ${nombreCliente}</p>
       <p style="margin-bottom:0px"><strong>Cédula:</strong> ${cedulaNit}</p>
       <p style="margin-bottom:0px"><strong>Fecha:</strong> ${fechaAbono}</p>
-      <p style="margin-bottom:0px"><strong>Método:</strong> ${metodoPago || 'Efectivo'}</p>
+      <p style="margin-bottom:0px"><strong>Cuenta:</strong> ${cuentaRecaudo || 'Efectivo'}</p>
       ${observacion ? `<p style="margin-bottom:0px"><strong>Obs:</strong> ${observacion}</p>` : ''}
       <hr style="border:1px solid #000;">
       <div style="text-align:center;padding:15px 0;background:#f5f5f5;margin:10px 0;">

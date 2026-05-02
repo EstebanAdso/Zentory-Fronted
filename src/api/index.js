@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const BASE_URL = 'http://localhost:8082';
+const BASE_URL = 'http://localhost:8083';
 
 const api = axios.create({ baseURL: BASE_URL });
 
@@ -62,13 +62,15 @@ export const getClienteSugerencias = (query) =>
 export const getTopClientes = () => api.get('/cliente/top');
 
 // ── Activos ───────────────────────────────────────────────────────────────
-export const getActivos = () => api.get('/activos');
+export const getActivos = (page = 0, size = 20) =>
+  api.get(`/activos?page=${page}&size=${size}`);
 export const crearActivo = (data) => api.post('/activos', data);
 export const actualizarActivo = (id, data) => api.put(`/activos/${id}`, data);
 export const eliminarActivo = (id) => api.delete(`/activos/${id}`);
 
 // ── Pedidos ───────────────────────────────────────────────────────────────
-export const getPedidos = () => api.get('/pedido');
+export const getPedidos = (page = 0, size = 20) =>
+  api.get(`/pedido?page=${page}&size=${size}`);
 export const crearPedido = (data) => api.post('/pedido', data);
 export const eliminarPedido = (id) => api.delete(`/pedido/${id}`);
 export const recibirPedido = (id) => api.put(`/pedido/${id}/recibir`);
@@ -80,9 +82,27 @@ export const buscarFacturas = (query, page = 0, size = 20) =>
   api.get(`/api/facturas/buscar?query=${encodeURIComponent(query)}&page=${page}&size=${size}`);
 export const getFactura = (id) => api.get(`/api/facturas/${id}`);
 export const getFacturaDetalles = (id) => api.get(`/api/facturas/${id}/detalles`);
+export const getFacturaPagos = (id) => api.get(`/api/facturas/${id}/pagos`);
 export const crearFactura = (data) => api.post('/api/facturas/crear', data);
 export const actualizarFactura = (id, data) => api.put(`/api/facturas/${id}`, data);
 export const eliminarFactura = (id) => api.delete(`/api/facturas/${id}`);
+
+// ── Cuentas de recaudo ────────────────────────────────────────────────────
+export const getCuentasRecaudo = (soloActivos = true) =>
+  api.get(`/api/cuentas-recaudo?soloActivos=${soloActivos}`);
+export const crearCuentaRecaudo = (data) => api.post('/api/cuentas-recaudo', data);
+export const actualizarCuentaRecaudo = (id, data) => api.put(`/api/cuentas-recaudo/${id}`, data);
+export const eliminarCuentaRecaudo = (id) => api.delete(`/api/cuentas-recaudo/${id}`);
+
+// ── Caja ──────────────────────────────────────────────────────────────────
+export const getCajaAbierta = () => api.get('/api/caja/abierta');
+export const getCajaResumen = (id) => api.get(`/api/caja/${id}/resumen`);
+export const getCajaMovimientos = (id) => api.get(`/api/caja/${id}/movimientos`);
+export const getCajaHistorial = (page = 0, size = 20) =>
+  api.get(`/api/caja/historial?page=${page}&size=${size}`);
+export const abrirCaja = (data) => api.post('/api/caja/abrir', data);
+export const cerrarCaja = (data) => api.post('/api/caja/cerrar', data);
+export const registrarGastoCaja = (data) => api.post('/api/caja/gasto', data);
 
 // ── Préstamos ─────────────────────────────────────────────────────────────
 export const getPrestamos = () => api.get('/api/prestamos');
@@ -97,8 +117,17 @@ export const actualizarPrestamo = (id, data) => api.put(`/api/prestamos/${id}`, 
 export const agregarAbono = (data) => api.post('/api/prestamos/abono', data);
 export const eliminarPrestamo = (id) => api.delete(`/api/prestamos/${id}`);
 export const anularPrestamo = (id) => api.post(`/api/prestamos/${id}/anular`);
-export const convertirPrestamoAFactura = (id) =>
-  api.post(`/api/prestamos/${id}/convertir-factura`);
+export const convertirPrestamoAFactura = (id, payload = null) => {
+  // payload: null | number (legacy: solo cuenta única) | { cuentaRecaudoId?, pagosFinal? }
+  let body = {};
+  if (payload && typeof payload === 'object') {
+    if (payload.pagosFinal && payload.pagosFinal.length > 0) body.pagosFinal = payload.pagosFinal;
+    else if (payload.cuentaRecaudoId) body.cuentaRecaudoId = payload.cuentaRecaudoId;
+  } else if (payload) {
+    body.cuentaRecaudoId = payload;
+  }
+  return api.post(`/api/prestamos/${id}/convertir-factura`, body);
+};
 
 // ── Códigos de barras ─────────────────────────────────────────────────────
 export const getCodigosBarra = () => api.get('/codigoBarra');

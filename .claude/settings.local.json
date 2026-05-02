@@ -4,7 +4,24 @@
       "Bash(npx eslint *)",
       "Bash(node --check src/pages/Ventas/index.jsx)",
       "Bash(npx vite *)",
-      "Bash(npm install *)"
+      "Bash(npm install *)",
+      "Bash(./mvnw -q -DskipTests compile)",
+      "Bash(./mvnw -DskipTests compile)",
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(./mvnw -DskipTests clean compile)",
+      "Bash(node -e \"require\\('@babel/parser'\\).parse\\(require\\('fs'\\).readFileSync\\('D:/RESPALDO/workspace/Proyectos Full Stack/Zentory/Zentory-Fronted/src/pages/Prestamos/index.jsx','utf8'\\),{sourceType:'module',plugins:['jsx']}\\); console.log\\('OK Prestamos'\\)\")",
+      "Bash(node -e \"require\\('@babel/parser'\\).parse\\(require\\('fs'\\).readFileSync\\('D:/RESPALDO/workspace/Proyectos Full Stack/Zentory/Zentory-Fronted/src/pages/Facturacion/index.jsx','utf8'\\),{sourceType:'module',plugins:['jsx']}\\); console.log\\('OK Facturacion'\\)\")",
+      "Bash(node -e \"require\\('@babel/parser'\\).parse\\(require\\('fs'\\).readFileSync\\('D:/RESPALDO/workspace/Proyectos Full Stack/Zentory/Zentory-Fronted/src/pages/Facturacion/index.jsx','utf8'\\),{sourceType:'module',plugins:['jsx']}\\); require\\('@babel/parser'\\).parse\\(require\\('fs'\\).readFileSync\\('D:/RESPALDO/workspace/Proyectos Full Stack/Zentory/Zentory-Fronted/src/pages/Prestamos/index.jsx','utf8'\\),{sourceType:'module',plugins:['jsx']}\\); console.log\\('OK both'\\)\")",
+      "Bash(node *)",
+      "Bash(cd /d \"D:\\\\RESPALDO\\\\workspace\\\\Proyectos Full Stack\\\\Zentory\\\\Zentory-Backend\")",
+      "Bash(dir mvnw*)",
+      "PowerShell(Set-Location *)",
+      "PowerShell(npm run *)",
+      "Bash(./mvnw.cmd compile *)",
+      "Bash(\"D:/RESPALDO/workspace/Proyectos Full Stack/Zentory/Zentory-Backend/mvnw.cmd\" -f \"D:/RESPALDO/workspace/Proyectos Full Stack/Zentory/Zentory-Backend/pom.xml\" compile -q)",
+      "PowerShell(& \"D:\\\\RESPALDO\\\\workspace\\\\Proyectos Full Stack\\\\Zentory\\\\Zentory-Backend\\\\mvnw.cmd\" -f \"D:\\\\RESPALDO\\\\workspace\\\\Proyectos Full Stack\\\\Zentory\\\\Zentory-Backend\\\\pom.xml\" compile -q 2>&1 | Select-Object -Last 30)",
+      "PowerShell(try { $r = Invoke-WebRequest -Uri 'http://localhost:8083/activos?page=0&size=1' -TimeoutSec 5 -UseBasicParsing; \"STATUS=$\\($r.StatusCode\\)\" } catch { \"ERROR=$\\($_.Exception.Message\\)\" })",
+      "PowerShell($a = Invoke-RestMethod -Uri 'http://localhost:8083/activos?page=0&size=20' -TimeoutSec 5; \"activos page=0 size=20 -> totalElements=$\\($a.totalElements\\) totalPages=$\\($a.totalPages\\) content=$\\($a.content.Count\\)\"; $p = Invoke-RestMethod -Uri 'http://localhost:8083/pedido?page=0&size=20' -TimeoutSec 5; \"pedidos page=0 size=20 -> totalElements=$\\($p.totalElements\\) totalPages=$\\($p.totalPages\\) content=$\\($p.content.Count\\)\")"
     ]
   }
 }

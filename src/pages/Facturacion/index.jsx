@@ -1,11 +1,12 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { toast } from 'sonner';
 import ConfirmModal from '../../components/ConfirmModal';
 import {
   getClienteSugerencias, buscarProductos as apiBuscarProductos,
-  buscarProductoPorCodigo, crearFactura, crearPrestamo,
+  buscarProductoPorCodigo, crearFactura, crearPrestamo, getCuentasRecaudo,
 } from '../../api';
-import { formatNumber, parseFormattedNumber } from '../../utils/formatters';
+import { formatNumber, parseFormattedNumber, onChangeMoney, formatMoneyInput } from '../../utils/formatters';
+import { applyAutoFill, distribuirEqual, normalizarPagos } from '../../utils/splitPay';
 import {
   abrirVentanaImpresion, abrirVentanaPOS,
   generarFacturaHTMLPDF, generarFacturaHTMLPOS,
@@ -13,7 +14,7 @@ import {
 } from '../../utils/printing';
 import {
   ShoppingBag, Plus, Trash2, Edit, Search, Tag, FileSignature,
-  Printer, FileText, XCircle, Eraser, Receipt, Eye, EyeOff,
+  Printer, FileText, XCircle, Eraser, Receipt, Eye, EyeOff, Wallet,
 } from 'lucide-react';
 
 // ── LocalStorage ───────────────────────────────────────────────────────────
@@ -60,6 +61,32 @@ export default function Facturacion() {
   const [obs, setObs] = useState('');
   const [confirm, setConfirm] = useState(null);
   const tCli = useRef(null), tProd = useRef(null);
+
+  // ── Cuentas de recaudo (split payment) ──────────────────────────────────
+  const [cuentasRecaudo, setCuentasRecaudo] = useState([]);
+  // { [cuentaId]: montoString } — keys = cuentas seleccionadas
+  const [pagosSel, setPagosSel] = useState({});
+  const [multiPago, setMultiPago] = useState(false);
+  // ID de la cuenta cuyo monto fue auto-completado con el restante (split-pay)
+  const [pagoAutoId, setPagoAutoId] = useState(null);
+  // Abono (apartado) con la misma mecánica de split-pay
+  const [pagosAbonoSel, setPagosAbonoSel] = useState({});
+  const [multiPagoAbono, setMultiPagoAbono] = useState(false);
+  const [pagoAbonoAutoId, setPagoAbonoAutoId] = useState(null);
+
+  useEffect(() => {
+    getCuentasRecaudo(true)
+      .then(({ data }) => {
+        const activos = Array.isArray(data) ? data : [];
+        setCuentasRecaudo(activos);
+        const efectivo = activos.find(c => c.esEfectivo) || activos[0];
+        if (efectivo) {
+          setPagosSel({ [efectivo.id]: '' });
+          setPagosAbonoSel({ [efectivo.id]: '' });
+        }
+      })
+      .catch(() => toast.error('Error al cargar cuentas de recaudo.'));
+  }, []);
 
   useEffect(() => {
     const s = {}; CLI_FIELDS.forEach(f => { s[f] = lsGet(f); }); setCliente(s);
@@ -151,6 +178,113 @@ export default function Facturacion() {
   const totalSinDesc = carrito.reduce((acc, item) => acc + (item.precioOriginal * item.cantidad), 0);
   const ahorroTotal = totalSinDesc - totalCarrito;
 
+  // ── Split payment derivados ─────────────────────────────────────────────
+  const selectedPagoIds = Object.keys(pagosSel);
+  const pagosNormalizados = useMemo(
+    () => normalizarPagos(pagosSel, totalCarrito),
+    [pagosSel, totalCarrito, selectedPagoIds.join(',')]
+  );
+
+  const sumaPagos = pagosNormalizados.reduce((s, p) => s + p.monto, 0);
+  const diferenciaPago = Math.round(totalCarrito) - sumaPagos;
+
+  function togglePago(id) {
+    if (!multiPago) {
+      setPagosSel({ [id]: '' });
+      setPagoAutoId(null);
+      return;
+    }
+    setPagosSel(prev => {
+      const n = { ...prev };
+      if (n[id] !== undefined) delete n[id];
+      else n[id] = '';
+      const { map, autoId } = applyAutoFill(n, Math.round(totalCarrito), pagoAutoId, null);
+      setPagoAutoId(autoId);
+      return map;
+    });
+  }
+  function toggleMultiPago() {
+    setMultiPago(prev => {
+      const next = !prev;
+      if (!next) {
+        const ids = Object.keys(pagosSel);
+        const keepId = ids[0] != null
+          ? Number(ids[0])
+          : (cuentasRecaudo.find(c => c.esEfectivo) || cuentasRecaudo[0])?.id;
+        if (keepId != null) setPagosSel({ [keepId]: '' });
+        setPagoAutoId(null);
+      }
+      return next;
+    });
+  }
+  function setMontoPago(id, valor) {
+    setPagosSel(prev => {
+      const next = { ...prev, [id]: valor };
+      const auto = String(pagoAutoId) === String(id) ? null : pagoAutoId;
+      const { map, autoId } = applyAutoFill(next, Math.round(totalCarrito), auto, id);
+      setPagoAutoId(autoId);
+      return map;
+    });
+  }
+  function autoDistribuir() {
+    setPagosSel(prev => distribuirEqual(prev, Math.round(totalCarrito)));
+    setPagoAutoId(null);
+  }
+
+  // ── Split payment para ABONO (apartado) ─────────────────────────────────
+  const selectedPagoAbonoIds = Object.keys(pagosAbonoSel);
+  const abonoNum = parseFormattedNumber(abono) || 0;
+  const pagosAbonoNormalizados = useMemo(
+    () => normalizarPagos(pagosAbonoSel, abonoNum),
+    [pagosAbonoSel, abonoNum, selectedPagoAbonoIds.join(',')]
+  );
+
+  const sumaPagosAbono = pagosAbonoNormalizados.reduce((s, p) => s + p.monto, 0);
+  const diferenciaPagoAbono = Math.round(abonoNum) - sumaPagosAbono;
+
+  function togglePagoAbono(id) {
+    if (!multiPagoAbono) {
+      setPagosAbonoSel({ [id]: '' });
+      setPagoAbonoAutoId(null);
+      return;
+    }
+    setPagosAbonoSel(prev => {
+      const n = { ...prev };
+      if (n[id] !== undefined) delete n[id];
+      else n[id] = '';
+      const { map, autoId } = applyAutoFill(n, Math.round(abonoNum), pagoAbonoAutoId, null);
+      setPagoAbonoAutoId(autoId);
+      return map;
+    });
+  }
+  function toggleMultiPagoAbono() {
+    setMultiPagoAbono(prev => {
+      const next = !prev;
+      if (!next) {
+        const ids = Object.keys(pagosAbonoSel);
+        const keepId = ids[0] != null
+          ? Number(ids[0])
+          : (cuentasRecaudo.find(c => c.esEfectivo) || cuentasRecaudo[0])?.id;
+        if (keepId != null) setPagosAbonoSel({ [keepId]: '' });
+        setPagoAbonoAutoId(null);
+      }
+      return next;
+    });
+  }
+  function setMontoPagoAbono(id, valor) {
+    setPagosAbonoSel(prev => {
+      const next = { ...prev, [id]: valor };
+      const auto = String(pagoAbonoAutoId) === String(id) ? null : pagoAbonoAutoId;
+      const { map, autoId } = applyAutoFill(next, Math.round(abonoNum), auto, id);
+      setPagoAbonoAutoId(autoId);
+      return map;
+    });
+  }
+  function autoDistribuirAbono() {
+    setPagosAbonoSel(prev => distribuirEqual(prev, Math.round(abonoNum)));
+    setPagoAbonoAutoId(null);
+  }
+
   function limpiarProd() {
     setProd({ nombre: '', precio: '', pc: '', cantidad: '1', garantia: '1', descripcion: '' });
     setProdSel(null); setMaxCant(null); setMayoreo(false); setSugProd([]); setShowProd(false);
@@ -158,12 +292,22 @@ export default function Facturacion() {
   function limpiarTodo() {
     setCliente({ nombreCliente: '', cedulaNit: '', telefonoCliente: '', correoCliente: '', direccionCliente: '' });
     limpiarProd(); setCarrito([]); setDescGen(''); setAbono(''); setObs(''); setTipDoc('FACTURA'); setEsPrest(false);
+    const efectivo = cuentasRecaudo.find(c => c.esEfectivo) || cuentasRecaudo[0];
+    setPagosSel(efectivo ? { [efectivo.id]: '' } : {});
+    setPagosAbonoSel(efectivo ? { [efectivo.id]: '' } : {});
+    setMultiPago(false);
+    setMultiPagoAbono(false);
     lsRemove([...CLI_FIELDS, LS_PROD]);
   }
   function validar() {
     if (!cliente.nombreCliente.trim() || !cliente.cedulaNit.trim()) { toast.error('El nombre y la identificación son obligatorios.'); return false; }
     if (carrito.length === 0) { toast.error('Agrega al menos un producto.'); return false; }
     if (parseFloat(descGen) > 0) { toast.error('Tienes un descuento por aplicar. Aplícalo o quítalo antes de imprimir.'); return false; }
+    if (selectedPagoIds.length === 0) { toast.error('Selecciona al menos una cuenta de recaudo.'); return false; }
+    if (multiPago && selectedPagoIds.length > 1 && Math.abs(diferenciaPago) > 1) {
+      toast.error('La suma de los pagos no coincide con el total.');
+      return false;
+    }
     return true;
   }
   function confirmSinAgregar(cb) {
@@ -171,8 +315,12 @@ export default function Facturacion() {
     else cb();
   }
 
-  const mkFact = fecha => ({ clienteNombre: cliente.nombreCliente, clienteCedula: cliente.cedulaNit, telefono: cliente.telefonoCliente || null, correo: cliente.correoCliente || null, direccion: cliente.direccionCliente || null, fechaCreacion: fecha, detalles: carrito.map(p => ({ productoId: p.id || '', nombreProducto: p.nombre, cantidad: p.cantidad, precioVenta: p.precioUnitario, garantia: `${p.garantia} Mes.`, descripcion: p.descripcion || '', precioCompra: p.pc || null })) });
-  const mkPrest = ab => ({ clienteNombre: cliente.nombreCliente, clienteCedula: cliente.cedulaNit, telefono: cliente.telefonoCliente || null, correo: cliente.correoCliente || null, direccion: cliente.direccionCliente || null, tipo: tipDoc, observaciones: obs || null, abonoInicial: ab > 0 ? ab : null, metodoPagoAbono: ab > 0 ? 'EFECTIVO' : null, detalles: carrito.map(p => ({ productoId: p.id || null, nombreProducto: p.nombre, cantidad: p.cantidad, precioVenta: p.precioUnitario, garantia: `${p.garantia} Mes.`, descripcion: p.descripcion || '', precioCompra: p.pc || null })) });
+  const mkFact = fecha => ({ clienteNombre: cliente.nombreCliente, clienteCedula: cliente.cedulaNit, telefono: cliente.telefonoCliente || null, correo: cliente.correoCliente || null, direccion: cliente.direccionCliente || null, fechaCreacion: fecha, detalles: carrito.map(p => ({ productoId: p.id || '', nombreProducto: p.nombre, cantidad: p.cantidad, precioVenta: p.precioUnitario, garantia: `${p.garantia} Mes.`, descripcion: p.descripcion || '', precioCompra: p.pc || null })), pagos: pagosNormalizados });
+  const mkPrest = ab => {
+    const usaMultiAbono = multiPagoAbono && selectedPagoAbonoIds.length > 1;
+    const cuentaIdSingleAbono = selectedPagoAbonoIds.length > 0 ? Number(selectedPagoAbonoIds[0]) : null;
+    return { clienteNombre: cliente.nombreCliente, clienteCedula: cliente.cedulaNit, telefono: cliente.telefonoCliente || null, correo: cliente.correoCliente || null, direccion: cliente.direccionCliente || null, tipo: tipDoc, observaciones: obs || null, abonoInicial: ab > 0 ? ab : null, cuentaRecaudoIdAbono: ab > 0 && !usaMultiAbono ? cuentaIdSingleAbono : null, pagosAbono: ab > 0 && usaMultiAbono ? pagosAbonoNormalizados : null, detalles: carrito.map(p => ({ productoId: p.id || null, nombreProducto: p.nombre, cantidad: p.cantidad, precioVenta: p.precioUnitario, garantia: `${p.garantia} Mes.`, descripcion: p.descripcion || '', precioCompra: p.pc || null })) };
+  };
   const hPOS = items => items.map(p => `<tr style="font-size:12px;color:#000"><td style="padding:1px 0;text-align:left;max-width:20mm;word-wrap:break-word;">${p.nombre.toUpperCase()} - ${p.descripcion || ''}</td><td style="text-align:center;">${p.cantidad}</td><td style="text-align:center;">${p.precioUnitario.toLocaleString('es-CO', { minimumFractionDigits: 0 })}</td><td style="text-align:center;">${p.garantia} Mes</td><td style="text-align:center;">${p.total.toLocaleString('es-CO', { minimumFractionDigits: 0 })}</td></tr>`).join('');
   const hPDF = items => items.map(p => `<tr><td style="border:1px solid #ddd;padding:8px;">${p.nombre.toUpperCase()}</td><td style="border:1px solid #ddd;padding:8px;text-align:center;">${p.cantidad}</td><td style="border:1px solid #ddd;padding:8px;text-align:right;">${p.precioUnitario.toLocaleString('es-CO', { minimumFractionDigits: 0 })}</td><td style="border:1px solid #ddd;padding:8px;">${p.garantia} Mes</td><td style="border:1px solid #ddd;padding:8px;">${p.descripcion || 'Excelente calidad'}</td><td style="border:1px solid #ddd;padding:8px;text-align:right;">${p.total.toLocaleString('es-CO', { minimumFractionDigits: 0 })}</td></tr>`).join('');
 
@@ -187,6 +335,11 @@ export default function Facturacion() {
     if (tipDoc === 'APARTADO') {
       if (!ab || ab <= 0) { toast.error('El abono inicial es obligatorio para apartados.'); return false; }
       if (ab > total) { toast.error('El abono inicial no puede ser mayor al total.'); return false; }
+      if (selectedPagoAbonoIds.length === 0) { toast.error('Selecciona al menos una cuenta para el abono.'); return false; }
+      if (multiPagoAbono && selectedPagoAbonoIds.length > 1 && Math.abs(diferenciaPagoAbono) > 1) {
+        toast.error('La suma de los abonos no coincide con el abono inicial.');
+        return false;
+      }
     }
     return true;
   }
@@ -263,7 +416,7 @@ export default function Facturacion() {
               <legend className="text-xs font-black text-slate-900 uppercase tracking-wider px-2 bg-white">
                 Configuración de Venta
               </legend>
-              <div className={`grid gap-4 ${tipDoc === 'APARTADO' ? 'grid-cols-2' : 'grid-cols-1'}`}>
+              <div className={`grid gap-4 ${tipDoc === 'APARTADO' ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'}`}>
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">Tipo de Documento</label>
                   <select
@@ -281,16 +434,16 @@ export default function Facturacion() {
                     <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">
                       Abono Inicial <span className="text-rose-500">*</span>
                     </label>
-                    <input
-                      type="text"
-                      placeholder="$0"
-                      value={abono}
-                      onChange={e => {
-                        const raw = parseFormattedNumber(e.target.value);
-                        setAbono(isNaN(raw) || raw === 0 ? '' : formatNumber(raw));
-                      }}
-                      className="w-full border-2 border-slate-200 rounded-lg px-3 h-11 text-sm outline-none focus:border-[#4488ee] focus:ring-2 focus:ring-[#4488ee]/20 transition-all tabular-nums font-semibold"
-                    />
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400 pointer-events-none">$</span>
+                      <input
+                        type="text" inputMode="numeric"
+                        placeholder="0"
+                        value={abono}
+                        onChange={onChangeMoney(setAbono)}
+                        className="w-full border-2 border-slate-200 rounded-lg pl-7 pr-3 h-11 text-sm outline-none focus:border-[#4488ee] focus:ring-2 focus:ring-[#4488ee]/20 transition-all tabular-nums font-semibold"
+                      />
+                    </div>
                   </div>
                 )}
               </div>
@@ -441,13 +594,17 @@ export default function Facturacion() {
               <div className="grid grid-cols-1 md:grid-cols-[1fr_0.6fr_0.6fr] gap-3 mb-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-1.5">Precio Venta</label>
-                  <input
-                    type="text"
-                    value={prod.precio}
-                    onChange={e => setProd(p => ({ ...p, precio: e.target.value }))}
-                    autoComplete="off"
-                    className="w-full border-2 border-slate-200 rounded-lg px-3 h-11 text-sm outline-none focus:border-[#4488ee] focus:ring-2 focus:ring-[#4488ee]/20 transition-all tabular-nums font-semibold"
-                  />
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400 pointer-events-none">$</span>
+                    <input
+                      type="text" inputMode="numeric"
+                      value={prod.precio}
+                      onChange={onChangeMoney(setProd, 'precio')}
+                      autoComplete="off"
+                      placeholder="0"
+                      className="w-full border-2 border-slate-200 rounded-lg pl-7 pr-3 h-11 text-sm outline-none focus:border-[#4488ee] focus:ring-2 focus:ring-[#4488ee]/20 transition-all tabular-nums font-semibold"
+                    />
+                  </div>
                   <label className="flex items-center gap-1.5 mt-1.5 cursor-pointer text-xs font-semibold text-slate-700">
                     <input type="checkbox" checked={mayoreo} onChange={e => onMayoreo(e.target.checked)} className="accent-[#4488ee]" />
                     Aplicar Mayoreo
@@ -577,15 +734,15 @@ export default function Facturacion() {
                           <td style={{ textAlign: 'right' }}>
                             {item.descuento > 0 ? (
                               <>
-                                <div className="text-[0.7rem] line-through text-slate-400">${item.precioOriginal.toLocaleString()}</div>
-                                <div className="text-rose-600">${item.precioUnitario.toLocaleString()}</div>
+                                <div className="text-[0.7rem] line-through text-slate-400">${formatNumber(item.precioOriginal)}</div>
+                                <div className="text-rose-600">${formatNumber(item.precioUnitario)}</div>
                               </>
                             ) : (
-                              `$${item.precioUnitario.toLocaleString()}`
+                              `$${formatNumber(item.precioUnitario)}`
                             )}
                           </td>
                           <td style={{ textAlign: 'right' }} className="font-black">
-                            ${Math.round(item.total).toLocaleString()}
+                            ${formatNumber(item.total)}
                           </td>
                           <td>
                             <div className="flex gap-1 justify-center">
@@ -618,13 +775,13 @@ export default function Facturacion() {
                   {ahorroTotal > 0 ? (
                     <div className="text-[0.7rem] font-black text-emerald-600 flex items-center gap-1.5">
                       <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
-                      AHORRAS: ${Math.round(ahorroTotal).toLocaleString('es-CO')}
+                      AHORRAS: ${formatNumber(ahorroTotal)}
                     </div>
                   ) : <div></div>}
 
                   {ahorroTotal > 0 && (
                     <div className="text-xs font-black text-slate-400 line-through">
-                      NORMAL: ${Math.round(totalSinDesc).toLocaleString('es-CO')}
+                      NORMAL: ${formatNumber(totalSinDesc)}
                     </div>
                   )}
                 </div>
@@ -664,10 +821,184 @@ export default function Facturacion() {
                       className="text-4xl font-black leading-none tabular-nums tracking-tight"
                       style={{ color: ahorroTotal > 0 ? '#10b981' : '#0f172a' }}
                     >
-                      ${Math.round(totalCarrito).toLocaleString('es-CO')}
+                      ${formatNumber(totalCarrito)}
                     </div>
                   </div>
                 </div>
+
+                {/* Cuenta de Abono (split) — solo APARTADO */}
+                {tipDoc === 'APARTADO' && cuentasRecaudo.length > 0 && (
+                  <div className="mt-3 border-t border-slate-200 pt-3">
+                    <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
+                      <div className="flex items-center gap-1.5 text-[0.7rem] font-black text-slate-500 uppercase tracking-wider">
+                        <Wallet size={12} /> Cuenta de Abono
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {multiPagoAbono && selectedPagoAbonoIds.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={autoDistribuirAbono}
+                            className="text-[0.65rem] font-black text-amber-600 hover:underline uppercase tracking-wider"
+                          >
+                            Auto-dividir
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={toggleMultiPagoAbono}
+                          className={`inline-flex items-center gap-1 px-2.5 h-6 rounded-full text-[0.65rem] font-black uppercase tracking-wider transition-colors border ${
+                            multiPagoAbono
+                              ? 'bg-amber-500 text-white border-amber-500'
+                              : 'bg-white text-slate-600 border-slate-300 hover:border-amber-500 hover:text-amber-600'
+                          }`}
+                        >
+                          Multi-pago {multiPagoAbono ? 'ON' : 'OFF'}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 mb-2">
+                      {cuentasRecaudo.map(c => {
+                        const sel = pagosAbonoSel[c.id] !== undefined;
+                        return (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => togglePagoAbono(c.id)}
+                            className={`px-3 h-7 rounded-full text-[0.7rem] font-black uppercase tracking-wider transition-colors border ${
+                              sel
+                                ? 'bg-amber-500 text-white border-amber-500'
+                                : 'bg-white text-slate-600 border-slate-300 hover:border-amber-500'
+                            }`}
+                          >
+                            {c.nombre}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {multiPagoAbono && selectedPagoAbonoIds.length > 1 && (
+                      <div className="space-y-1.5">
+                        {selectedPagoAbonoIds.map(id => {
+                          const m = cuentasRecaudo.find(x => x.id === Number(id));
+                          if (!m) return null;
+                          const isAuto = String(pagoAbonoAutoId) === String(id);
+                          return (
+                            <div key={id} className="flex items-center gap-2">
+                              <span className="w-28 text-[0.7rem] font-black text-slate-600 uppercase truncate flex items-center gap-1">
+                                {m.nombre}
+                                {isAuto && <span className="text-[0.55rem] font-black text-amber-600 bg-amber-100 border border-amber-300 px-1 rounded">AUTO</span>}
+                              </span>
+                              <div className="relative flex-1">
+                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-black text-slate-400">$</span>
+                                <input
+                                  type="text"
+                                  inputMode="numeric"
+                                  value={pagosAbonoSel[id]}
+                                  onChange={e => setMontoPagoAbono(id, formatMoneyInput(e.target.value))}
+                                  placeholder="0"
+                                  className={`cart-input-mini w-full h-8 text-sm pl-5 text-right ${isAuto ? 'bg-amber-50 border-amber-300' : ''}`}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                        <div className={`flex justify-between text-[0.7rem] font-black uppercase tracking-wider pt-1 ${
+                          Math.abs(diferenciaPagoAbono) <= 1 ? 'text-emerald-600' : 'text-rose-600'
+                        }`}>
+                          <span>Diferencia Abono</span>
+                          <span className="tabular-nums">${formatNumber(diferenciaPagoAbono)}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Cuentas de recaudo (split) — solo FACTURA */}
+                {!esPrest && cuentasRecaudo.length > 0 && (
+                  <div className="mt-3 border-t border-slate-200 pt-3">
+                    <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
+                      <div className="flex items-center gap-1.5 text-[0.7rem] font-black text-slate-500 uppercase tracking-wider">
+                        <Wallet size={12} /> Cuenta de Recaudo
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {multiPago && selectedPagoIds.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={autoDistribuir}
+                            className="text-[0.65rem] font-black text-[#4488ee] hover:underline uppercase tracking-wider"
+                          >
+                            Auto-dividir
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={toggleMultiPago}
+                          className={`inline-flex items-center gap-1 px-2.5 h-6 rounded-full text-[0.65rem] font-black uppercase tracking-wider transition-colors border ${
+                            multiPago
+                              ? 'bg-[#4488ee] text-white border-[#4488ee]'
+                              : 'bg-white text-slate-600 border-slate-300 hover:border-[#4488ee] hover:text-[#4488ee]'
+                          }`}
+                        >
+                          Multi-pago {multiPago ? 'ON' : 'OFF'}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 mb-2">
+                      {cuentasRecaudo.map(c => {
+                        const sel = pagosSel[c.id] !== undefined;
+                        return (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => togglePago(c.id)}
+                            className={`px-3 h-7 rounded-full text-[0.7rem] font-black uppercase tracking-wider transition-colors border ${
+                              sel
+                                ? 'bg-slate-900 text-white border-slate-900'
+                                : 'bg-white text-slate-600 border-slate-300 hover:border-slate-900'
+                            }`}
+                          >
+                            {c.nombre}
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {multiPago && selectedPagoIds.length > 1 && (
+                      <div className="space-y-1.5">
+                        {selectedPagoIds.map(id => {
+                          const m = cuentasRecaudo.find(x => x.id === Number(id));
+                          if (!m) return null;
+                          const isAuto = String(pagoAutoId) === String(id);
+                          return (
+                            <div key={id} className="flex items-center gap-2">
+                              <span className="w-28 text-[0.7rem] font-black text-slate-600 uppercase truncate flex items-center gap-1">
+                                {m.nombre}
+                                {isAuto && <span className="text-[0.55rem] font-black text-amber-600 bg-amber-100 border border-amber-300 px-1 rounded">AUTO</span>}
+                              </span>
+                              <div className="relative flex-1">
+                                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-black text-slate-400">$</span>
+                                <input
+                                  type="text"
+                                  inputMode="numeric"
+                                  value={pagosSel[id]}
+                                  onChange={e => setMontoPago(id, formatMoneyInput(e.target.value))}
+                                  placeholder="0"
+                                  className={`cart-input-mini w-full h-8 text-sm pl-5 text-right ${isAuto ? 'bg-amber-50 border-amber-300' : ''}`}
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                        <div className={`flex justify-between text-[0.7rem] font-black uppercase tracking-wider pt-1 ${
+                          Math.abs(diferenciaPago) <= 1 ? 'text-emerald-600' : 'text-rose-600'
+                        }`}>
+                          <span>Diferencia</span>
+                          <span className="tabular-nums">${formatNumber(diferenciaPago)}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div className="mt-4 grid grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] gap-2">
                   {!esPrest ? (

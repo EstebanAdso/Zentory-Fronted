@@ -3,14 +3,14 @@ import { toast } from 'sonner';
 import {
   Search, RefreshCw, Printer, FileText, FileCheck, Ban, Receipt,
   Package, ChevronDown, HandCoins, Bookmark, DollarSign, TrendingDown,
-  X, CreditCard, Loader2,
+  X, CreditCard, Loader2, AlertTriangle,
 } from 'lucide-react';
 import {
   useFloating, useHover, useFocus, useInteractions, useTransitionStyles,
   FloatingPortal, offset, flip, shift, arrow, FloatingArrow, safePolygon,
 } from '@floating-ui/react';
-import ConfirmModal from '../../components/ConfirmModal';
-import { formatNumber, parseFormattedNumber } from '../../utils/formatters';
+import { formatNumber, parseFormattedNumber, onChangeMoney, formatMoneyInput } from '../../utils/formatters';
+import { applyAutoFill, distribuirEqual } from '../../utils/splitPay';
 import {
   generarPrestamoHTMLPDF, generarPrestamoHTMLPOS, generarAbonoHTMLPOS,
   abrirVentanaImpresion, abrirVentanaPOS,
@@ -19,10 +19,10 @@ import {
   getPrestamos, getPrestamosPorEstado, getPrestamosPendientes,
   getPrestamo, getPrestamoDetalles, getPrestamoAbonos,
   agregarAbono, anularPrestamo, convertirPrestamoAFactura,
+  getCuentasRecaudo,
 } from '../../api';
 
 // ── Constants ───────────────────────────────────────────────────────────────
-const METODOS_PAGO = ['EFECTIVO', 'TRANSFERENCIA', 'TARJETA', 'NEQUI', 'DAVIPLATA'];
 
 const TIPO_BADGE = {
   PRESTAMO: 'bg-amber-100 text-amber-800 border-amber-200',
@@ -281,7 +281,7 @@ const filaAbonoPDF = (a) => `
   <tr>
     <td style="border:1px solid #ddd;padding:6px">${new Date(a.fechaAbono).toLocaleString('es-CO')}</td>
     <td style="border:1px solid #ddd;padding:6px;text-align:right;color:green">$${formatNumber(a.monto)}</td>
-    <td style="border:1px solid #ddd;padding:6px">${a.metodoPago || 'N/A'}</td>
+    <td style="border:1px solid #ddd;padding:6px">${a.cuentaRecaudo?.nombre || 'N/A'}</td>
     <td style="border:1px solid #ddd;padding:6px">${a.observacion || '-'}</td>
   </tr>
 `;
@@ -303,10 +303,17 @@ export default function Prestamos() {
   const [abonos, setAbonos] = useState([]);
 
   const [montoAbono, setMontoAbono] = useState('');
-  const [metodoAbono, setMetodoAbono] = useState('EFECTIVO');
+  const [cuentaAbonoId, setCuentaAbonoId] = useState('');
   const [obsAbono, setObsAbono] = useState('');
 
-  const [confirm, setConfirm] = useState(null);
+  const [cuentasRecaudo, setCuentasRecaudo] = useState([]);
+
+  // Panel de acción inline dentro del modal de detalle: null | 'convertir' | 'anular'
+  const [accionPanel, setAccionPanel] = useState(null);
+  // Split-pay para el saldo final al convertir
+  const [convertirMulti, setConvertirMulti] = useState(false);
+  const [convertirPagos, setConvertirPagos] = useState({}); // { [cuentaId]: montoString }
+  const [convertirAutoId, setConvertirAutoId] = useState(null);
 
   const [productosCache, setProductosCache] = useState({});
   const inFlightRef = useRef(new Set());
@@ -365,6 +372,16 @@ export default function Prestamos() {
   useEffect(() => { cargarPrestamos(); }, [cargarPrestamos]);
   useEffect(() => { cargarResumen(); }, [cargarResumen]);
 
+  useEffect(() => {
+    getCuentasRecaudo(true)
+      .then(({ data }) => {
+        setCuentasRecaudo(data);
+        const efectivo = data.find((m) => m.esEfectivo) || data[0];
+        if (efectivo) setCuentaAbonoId((prev) => prev || String(efectivo.id));
+      })
+      .catch(() => toast.error('No se pudieron cargar las cuentas de recaudo.'));
+  }, []);
+
   const prestamosFiltrados = useMemo(() => {
     const q = busqueda.toLowerCase().trim();
     if (!q) return prestamos;
@@ -390,12 +407,13 @@ export default function Prestamos() {
       setAbonos(resAbo.data);
       setMontoAbono('');
       setObsAbono('');
-      setMetodoAbono('EFECTIVO');
+      const efectivo = cuentasRecaudo.find((m) => m.esEfectivo) || cuentasRecaudo[0];
+      if (efectivo) setCuentaAbonoId(String(efectivo.id));
       setShowDetalle(true);
     } catch {
       toast.error('Error al cargar el detalle del préstamo.');
     }
-  }, [productosCache]);
+  }, [productosCache, cuentasRecaudo]);
 
   const recargarDetalle = useCallback(async () => {
     if (!prestamoSel) return;
@@ -420,17 +438,33 @@ export default function Prestamos() {
       toast.error('El monto del abono no puede ser mayor al saldo pendiente.');
       return;
     }
+    if (!cuentaAbonoId) {
+      toast.error('Selecciona una cuenta de recaudo.');
+      return;
+    }
     try {
       await agregarAbono({
         prestamoId: prestamoSel.id,
         monto,
-        metodoPago: metodoAbono,
+        cuentaRecaudoId: Number(cuentaAbonoId),
         observacion: obsAbono.trim() || null,
       });
       toast.success('Abono registrado exitosamente.');
       setMontoAbono('');
       setObsAbono('');
-      await recargarDetalle();
+      // Refrescar y abrir la previsualización del recibo del nuevo abono
+      const [resPres, resAbo] = await Promise.all([
+        getPrestamo(prestamoSel.id),
+        getPrestamoAbonos(prestamoSel.id),
+      ]);
+      const prestamoActualizado = resPres.data;
+      const abonosActualizados = resAbo.data;
+      setPrestamoSel(prestamoActualizado);
+      setAbonos(abonosActualizados);
+      if (abonosActualizados.length > 0) {
+        const idxNuevo = abonosActualizados.length - 1;
+        imprimirRecibo(abonosActualizados[idxNuevo], idxNuevo, prestamoActualizado);
+      }
       cargarPrestamos();
       cargarResumen();
     } catch (err) {
@@ -438,41 +472,134 @@ export default function Prestamos() {
     }
   };
 
-  const confirmarConvertirFactura = () => setConfirm({
-    mensaje: '¿Está seguro de convertir este préstamo a factura? Esta acción no se puede deshacer.',
-    textoAceptar: 'Sí, convertir',
-    danger: false,
-    onAceptar: async () => {
-      setConfirm(null);
-      try {
-        const { data } = await convertirPrestamoAFactura(prestamoSel.id);
-        toast.success(`Factura #${data.serial} generada. El préstamo quedó como PAGADO.`);
-        setShowDetalle(false);
-        cargarPrestamos();
-        cargarResumen();
-      } catch (err) {
-        toast.error('Error al convertir a factura: ' + (err.response?.data || err.message));
-      }
-    },
-  });
+  const iniciarConvertir = () => {
+    if (!prestamoSel) return;
+    if (prestamoSel.saldoPendiente > 0.01) {
+      // Requiere indicar cuenta de recaudo para el saldo restante
+      const efectivo = cuentasRecaudo.find((m) => m.esEfectivo) || cuentasRecaudo[0];
+      if (efectivo) setConvertirPagos({ [efectivo.id]: '' });
+      setConvertirMulti(false);
+      setConvertirAutoId(null);
+    }
+    setAccionPanel('convertir');
+  };
 
-  const confirmarAnular = () => setConfirm({
-    mensaje: '¿Está seguro de anular este préstamo? Los productos volverán al inventario. Esta acción no se puede deshacer.',
-    textoAceptar: 'Sí, anular',
-    danger: true,
-    onAceptar: async () => {
-      setConfirm(null);
-      try {
-        await anularPrestamo(prestamoSel.id);
-        toast.success('Préstamo anulado. Los productos volvieron al inventario.');
-        setShowDetalle(false);
-        cargarPrestamos();
-        cargarResumen();
-      } catch (err) {
-        toast.error('Error al anular el préstamo: ' + (err.response?.data || err.message));
+  const toggleConvertirMulti = () => {
+    setConvertirMulti((prev) => {
+      const next = !prev;
+      if (!next) {
+        const ids = Object.keys(convertirPagos);
+        const keepId = ids[0] != null
+          ? Number(ids[0])
+          : (cuentasRecaudo.find((m) => m.esEfectivo) || cuentasRecaudo[0])?.id;
+        if (keepId != null) setConvertirPagos({ [keepId]: '' });
+        setConvertirAutoId(null);
       }
-    },
-  });
+      return next;
+    });
+  };
+
+  const toggleConvertirPago = (id) => {
+    if (!convertirMulti) {
+      setConvertirPagos({ [id]: '' });
+      setConvertirAutoId(null);
+      return;
+    }
+    setConvertirPagos((prev) => {
+      const n = { ...prev };
+      if (n[id] !== undefined) delete n[id];
+      else n[id] = '';
+      const total = Math.round(prestamoSel?.saldoPendiente || 0);
+      const { map, autoId } = applyAutoFill(n, total, convertirAutoId, null);
+      setConvertirAutoId(autoId);
+      return map;
+    });
+  };
+
+  const setMontoConvertir = (id, valor) => {
+    setConvertirPagos((prev) => {
+      const next = { ...prev, [id]: valor };
+      const total = Math.round(prestamoSel?.saldoPendiente || 0);
+      const auto = String(convertirAutoId) === String(id) ? null : convertirAutoId;
+      const { map, autoId } = applyAutoFill(next, total, auto, id);
+      setConvertirAutoId(autoId);
+      return map;
+    });
+  };
+
+  const autoDistribuirConvertir = () => {
+    const total = Math.round(prestamoSel?.saldoPendiente || 0);
+    setConvertirPagos((prev) => distribuirEqual(prev, total));
+    setConvertirAutoId(null);
+  };
+
+  const cerrarDetalle = () => {
+    setShowDetalle(false);
+    setAccionPanel(null);
+  };
+
+  const ejecutarConvertir = async (payload) => {
+    try {
+      const { data } = await convertirPrestamoAFactura(prestamoSel.id, payload);
+      toast.success(`Factura #${data.serial} generada. El préstamo quedó como PAGADO.`);
+      cerrarDetalle();
+      setConvertirMulti(false);
+      setConvertirPagos({});
+      setConvertirAutoId(null);
+      cargarPrestamos();
+      cargarResumen();
+    } catch (err) {
+      toast.error('Error al convertir a factura: ' + (err.response?.data || err.message));
+    }
+  };
+
+  const submitConvertir = () => {
+    if (!prestamoSel) return;
+    // Sin saldo pendiente: convertir directo
+    if (prestamoSel.saldoPendiente <= 0.01) {
+      ejecutarConvertir(null);
+      return;
+    }
+    const idsConvertir = Object.keys(convertirPagos);
+    if (idsConvertir.length === 0) {
+      toast.error('Selecciona al menos una cuenta de recaudo.');
+      return;
+    }
+    const usaMulti = convertirMulti && idsConvertir.length > 1;
+    if (usaMulti) {
+      const saldo = Math.round(prestamoSel.saldoPendiente);
+      const suma = idsConvertir.reduce(
+        (s, k) => s + (parseFormattedNumber(convertirPagos[k]) || 0),
+        0
+      );
+      if (Math.abs(saldo - suma) > 1) {
+        toast.error('La suma de los pagos no coincide con el saldo pendiente.');
+        return;
+      }
+      const pagosFinal = idsConvertir
+        .map((id) => ({
+          cuentaRecaudoId: Number(id),
+          monto: parseFormattedNumber(convertirPagos[id]) || 0,
+        }))
+        .filter((p) => p.monto > 0);
+      ejecutarConvertir({ pagosFinal });
+    } else {
+      ejecutarConvertir({ cuentaRecaudoId: Number(idsConvertir[0]) });
+    }
+  };
+
+  const ejecutarAnular = async () => {
+    if (!prestamoSel) return;
+    try {
+      await anularPrestamo(prestamoSel.id);
+      toast.success('Préstamo anulado. Los productos volvieron al inventario.');
+      cerrarDetalle();
+      cargarPrestamos();
+      cargarResumen();
+    } catch (err) {
+      toast.error('Error al anular el préstamo: ' + (err.response?.data || err.message));
+    }
+  };
 
   const imprimirPOS = () => {
     if (!prestamoSel) return;
@@ -513,19 +640,20 @@ export default function Prestamos() {
     abrirVentanaImpresion(html);
   };
 
-  const imprimirRecibo = (abono, index) => {
-    if (!prestamoSel) return;
+  const imprimirRecibo = (abono, index, prestamoOverride) => {
+    const prestamo = prestamoOverride || prestamoSel;
+    if (!prestamo) return;
     const html = generarAbonoHTMLPOS({
-      prestamoId: prestamoSel.serial,
-      tipoDocumento: prestamoSel.tipo,
-      nombreCliente: prestamoSel.clienteNombre,
-      cedulaNit: prestamoSel.cliente?.identificacion || 'N/A',
+      prestamoId: prestamo.serial,
+      tipoDocumento: prestamo.tipo,
+      nombreCliente: prestamo.clienteNombre,
+      cedulaNit: prestamo.cliente?.identificacion || 'N/A',
       montoAbono: abono.monto,
-      metodoPago: abono.metodoPago,
+      cuentaRecaudo: abono.cuentaRecaudo?.nombre || 'N/A',
       observacion: abono.observacion,
-      totalPrestamo: prestamoSel.total,
-      totalAbonado: prestamoSel.totalAbonado,
-      saldoPendiente: prestamoSel.saldoPendiente,
+      totalPrestamo: prestamo.total,
+      totalAbonado: prestamo.totalAbonado,
+      saldoPendiente: prestamo.saldoPendiente,
       fechaAbono: new Date(abono.fechaAbono).toLocaleString('es-CO'),
       numeroAbono: index + 1,
     });
@@ -651,7 +779,7 @@ export default function Prestamos() {
       </main>
 
       {/* ── Modal Detalle ───────────────────────────────────────────────────── */}
-      <Modal show={showDetalle} onClose={() => setShowDetalle(false)}>
+      <Modal show={showDetalle} onClose={cerrarDetalle}>
         {prestamoSel && (
           <>
             {/* Header */}
@@ -664,7 +792,7 @@ export default function Prestamos() {
                 <p className="text-xs text-slate-300 mt-0.5">{prestamoSel.clienteNombre}</p>
               </div>
               <button
-                onClick={() => setShowDetalle(false)}
+                onClick={cerrarDetalle}
                 className="text-white/80 hover:text-white transition-colors"
               >
                 <X size={22} />
@@ -751,7 +879,7 @@ export default function Prestamos() {
                     <tr className="bg-slate-50 border-b border-slate-200">
                       <th className="px-3 py-2 text-left font-bold text-slate-600 text-xs uppercase tracking-wide">Fecha</th>
                       <th className="px-3 py-2 text-right font-bold text-slate-600 text-xs uppercase tracking-wide w-28">Monto</th>
-                      <th className="px-3 py-2 text-center font-bold text-slate-600 text-xs uppercase tracking-wide w-32">Método</th>
+                      <th className="px-3 py-2 text-center font-bold text-slate-600 text-xs uppercase tracking-wide w-32">Cuenta</th>
                       <th className="px-3 py-2 text-left font-bold text-slate-600 text-xs uppercase tracking-wide">Observación</th>
                       <th className="px-3 py-2 text-center font-bold text-slate-600 text-xs uppercase tracking-wide w-20">Recibo</th>
                     </tr>
@@ -770,7 +898,7 @@ export default function Prestamos() {
                           <td className="px-3 py-2 text-right text-emerald-700 font-bold tabular-nums">${formatNumber(a.monto)}</td>
                           <td className="px-3 py-2 text-center">
                             <span className="inline-block px-2 py-0.5 bg-slate-100 text-slate-700 rounded text-xs font-semibold">
-                              {a.metodoPago || 'N/A'}
+                              {a.cuentaRecaudo?.nombre || 'N/A'}
                             </span>
                           </td>
                           <td className="px-3 py-2 text-slate-600">{a.observacion || '-'}</td>
@@ -799,26 +927,27 @@ export default function Prestamos() {
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
                     <div>
                       <label className="block text-xs font-bold text-slate-600 uppercase tracking-wide mb-1">Monto</label>
-                      <input
-                        type="text"
-                        value={montoAbono}
-                        onChange={(e) => {
-                          const raw = e.target.value.replace(/[^\d]/g, '');
-                          setMontoAbono(raw ? Number(raw).toLocaleString('es-CO') : '');
-                        }}
-                        placeholder="$0"
-                        className="w-full border-2 border-slate-200 rounded-lg px-3 h-10 text-sm outline-none focus:border-[#4488ee] focus:ring-2 focus:ring-[#4488ee]/20 transition-all tabular-nums"
-                      />
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400 pointer-events-none">$</span>
+                        <input
+                          type="text" inputMode="numeric"
+                          value={montoAbono}
+                          onChange={onChangeMoney(setMontoAbono)}
+                          placeholder="0"
+                          className="w-full border-2 border-slate-200 rounded-lg pl-7 pr-3 h-10 text-sm outline-none focus:border-[#4488ee] focus:ring-2 focus:ring-[#4488ee]/20 transition-all tabular-nums"
+                        />
+                      </div>
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-slate-600 uppercase tracking-wide mb-1">Método</label>
+                      <label className="block text-xs font-bold text-slate-600 uppercase tracking-wide mb-1">Cuenta</label>
                       <select
-                        value={metodoAbono}
-                        onChange={(e) => setMetodoAbono(e.target.value)}
+                        value={cuentaAbonoId}
+                        onChange={(e) => setCuentaAbonoId(e.target.value)}
                         className="w-full border-2 border-slate-200 rounded-lg px-3 h-10 text-sm outline-none focus:border-[#4488ee] focus:ring-2 focus:ring-[#4488ee]/20 transition-all bg-white"
                       >
-                        {METODOS_PAGO.map((m) => (
-                          <option key={m} value={m}>{m.charAt(0) + m.slice(1).toLowerCase()}</option>
+                        {cuentasRecaudo.length === 0 && <option value="">Sin cuentas</option>}
+                        {cuentasRecaudo.map((m) => (
+                          <option key={m.id} value={m.id}>{m.nombre}</option>
                         ))}
                       </select>
                     </div>
@@ -843,50 +972,219 @@ export default function Prestamos() {
               )}
             </div>
 
-            {/* Footer con acciones */}
-            <div className="flex flex-wrap items-center justify-end gap-2 px-6 py-4 bg-slate-50 border-t border-slate-200">
-              <button
-                onClick={imprimirPOS}
-                className="inline-flex items-center gap-1.5 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg px-3 h-9 text-sm font-semibold transition-colors"
-              >
-                <Printer size={14} /> POS
-              </button>
-              <button
-                onClick={imprimirPDF}
-                className="inline-flex items-center gap-1.5 border-2 border-cyan-600 text-cyan-600 hover:bg-cyan-50 rounded-lg px-3 h-9 text-sm font-semibold transition-colors"
-              >
-                <FileText size={14} /> PDF
-              </button>
-              {esPendiente && (
-                <>
+            {/* Footer · cambia entre acciones por defecto y paneles inline (anular / convertir) */}
+            {accionPanel === null && (
+              <div className="flex flex-wrap items-center justify-end gap-2 px-6 py-4 bg-slate-50 border-t border-slate-200">
+                <button
+                  onClick={imprimirPOS}
+                  className="inline-flex items-center gap-1.5 bg-cyan-600 hover:bg-cyan-700 text-white rounded-lg px-3 h-9 text-sm font-semibold transition-colors"
+                >
+                  <Printer size={14} /> POS
+                </button>
+                <button
+                  onClick={imprimirPDF}
+                  className="inline-flex items-center gap-1.5 border-2 border-cyan-600 text-cyan-600 hover:bg-cyan-50 rounded-lg px-3 h-9 text-sm font-semibold transition-colors"
+                >
+                  <FileText size={14} /> PDF
+                </button>
+                {esPendiente && (
+                  <>
+                    <button
+                      onClick={iniciarConvertir}
+                      className="inline-flex items-center gap-1.5 bg-[#4488ee] hover:bg-[#3672c9] text-white rounded-lg px-3 h-9 text-sm font-bold transition-colors shadow-sm shadow-[#4488ee]/20"
+                    >
+                      <FileCheck size={14} /> Convertir a Factura
+                    </button>
+                    <button
+                      onClick={() => setAccionPanel('anular')}
+                      className="inline-flex items-center gap-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg px-3 h-9 text-sm font-semibold transition-colors"
+                    >
+                      <Ban size={14} /> Anular
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Panel inline · Anular */}
+            {accionPanel === 'anular' && (
+              <div className="px-6 py-4 bg-rose-50 border-t-2 border-rose-200">
+                <div className="flex items-start gap-3 mb-3">
+                  <div className="shrink-0 w-9 h-9 rounded-full bg-rose-100 flex items-center justify-center">
+                    <AlertTriangle size={18} className="text-rose-600" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-rose-900 m-0">
+                      ¿De verdad desea anular este {tipoTexto.toLowerCase()}?
+                    </p>
+                    <p className="text-xs text-rose-700 mt-0.5">
+                      Los productos volverán al inventario. Esta acción no se puede deshacer.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center justify-end gap-2">
                   <button
-                    onClick={confirmarConvertirFactura}
-                    className="inline-flex items-center gap-1.5 bg-[#4488ee] hover:bg-[#3672c9] text-white rounded-lg px-3 h-9 text-sm font-bold transition-colors shadow-sm shadow-[#4488ee]/20"
+                    onClick={() => setAccionPanel(null)}
+                    className="inline-flex items-center gap-1.5 border-2 border-slate-300 bg-white text-slate-700 hover:bg-slate-100 rounded-lg px-3 h-9 text-sm font-semibold transition-colors"
                   >
-                    <FileCheck size={14} /> Convertir a Factura
+                    Cancelar
                   </button>
                   <button
-                    onClick={confirmarAnular}
-                    className="inline-flex items-center gap-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg px-3 h-9 text-sm font-semibold transition-colors"
+                    onClick={ejecutarAnular}
+                    className="inline-flex items-center gap-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg px-3 h-9 text-sm font-bold transition-colors shadow-sm shadow-rose-600/20"
                   >
-                    <Ban size={14} /> Anular
+                    <Ban size={14} /> Sí, anular
                   </button>
-                </>
-              )}
-            </div>
+                </div>
+              </div>
+            )}
+
+            {/* Panel inline · Convertir a Factura */}
+            {accionPanel === 'convertir' && (() => {
+              const saldo = Math.round(prestamoSel.saldoPendiente || 0);
+              const tieneSaldo = saldo > 0;
+              const idsConvertir = Object.keys(convertirPagos);
+              const sumaConvertir = idsConvertir.reduce(
+                (s, k) => s + (parseFormattedNumber(convertirPagos[k]) || 0),
+                0
+              );
+              const diferenciaConvertir = saldo - sumaConvertir;
+              return (
+                <div className="px-6 py-4 bg-[#4488ee]/5 border-t-2 border-[#4488ee]/30">
+                  <div className="flex items-start gap-3 mb-3">
+                    <div className="shrink-0 w-9 h-9 rounded-full bg-[#4488ee]/15 flex items-center justify-center">
+                      <FileCheck size={18} className="text-[#4488ee]" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold text-slate-900 m-0">
+                        Convertir a Factura
+                      </p>
+                      <p className="text-xs text-slate-600 mt-0.5">
+                        {tieneSaldo ? (
+                          <>
+                            Saldo pendiente:{' '}
+                            <strong className="text-rose-700">${formatNumber(saldo)}</strong>.
+                            Indica la cuenta de recaudo con la que se cubrirá el saldo (se registrará en caja).
+                          </>
+                        ) : (
+                          <>Esta acción no se puede deshacer. Se generará una factura con los productos del {tipoTexto.toLowerCase()}.</>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+
+                  {tieneSaldo && (
+                    <>
+                      <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
+                        <label className="text-[0.7rem] font-bold text-slate-600 uppercase tracking-wide">Cuenta(s) de recaudo</label>
+                        <div className="flex items-center gap-2">
+                          {convertirMulti && idsConvertir.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={autoDistribuirConvertir}
+                              className="text-[0.65rem] font-black text-amber-600 hover:underline uppercase tracking-wider"
+                            >
+                              Auto-dividir
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={toggleConvertirMulti}
+                            className={`inline-flex items-center gap-1 px-2.5 h-6 rounded-full text-[0.65rem] font-black uppercase tracking-wider transition-colors border ${
+                              convertirMulti
+                                ? 'bg-amber-500 text-white border-amber-500'
+                                : 'bg-white text-slate-600 border-slate-300 hover:border-amber-500 hover:text-amber-600'
+                            }`}
+                          >
+                            Multi-pago {convertirMulti ? 'ON' : 'OFF'}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap gap-1.5 mb-2">
+                        {cuentasRecaudo.length === 0 && <span className="text-xs text-slate-500">Sin cuentas</span>}
+                        {cuentasRecaudo.map((m) => {
+                          const sel = convertirPagos[m.id] !== undefined;
+                          return (
+                            <button
+                              key={m.id}
+                              type="button"
+                              onClick={() => toggleConvertirPago(m.id)}
+                              className={`px-3 h-7 rounded-full text-[0.7rem] font-black uppercase tracking-wider transition-colors border ${
+                                sel
+                                  ? 'bg-amber-500 text-white border-amber-500'
+                                  : 'bg-white text-slate-600 border-slate-300 hover:border-amber-500'
+                              }`}
+                            >
+                              {m.nombre}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      {convertirMulti && idsConvertir.length > 1 && (
+                        <div className="space-y-1.5 mt-2 mb-3">
+                          {idsConvertir.map((id) => {
+                            const m = cuentasRecaudo.find((x) => x.id === Number(id));
+                            if (!m) return null;
+                            const isAuto = String(convertirAutoId) === String(id);
+                            return (
+                              <div key={id} className="flex items-center gap-2">
+                                <span className="w-28 text-[0.7rem] font-black text-slate-600 uppercase truncate flex items-center gap-1">
+                                  {m.nombre}
+                                  {isAuto && (
+                                    <span className="text-[0.55rem] font-black text-amber-600 bg-amber-100 border border-amber-300 px-1 rounded">AUTO</span>
+                                  )}
+                                </span>
+                                <div className="relative flex-1">
+                                  <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-black text-slate-400">$</span>
+                                  <input
+                                    type="text"
+                                    inputMode="numeric"
+                                    value={convertirPagos[id]}
+                                    onChange={(e) => setMontoConvertir(id, formatMoneyInput(e.target.value))}
+                                    placeholder="0"
+                                    className={`w-full h-9 text-sm pl-5 text-right border-2 rounded-lg outline-none focus:border-[#4488ee] focus:ring-2 focus:ring-[#4488ee]/20 transition-all ${
+                                      isAuto ? 'bg-amber-50 border-amber-300' : 'border-slate-200'
+                                    }`}
+                                  />
+                                </div>
+                              </div>
+                            );
+                          })}
+                          <div
+                            className={`flex justify-between text-[0.7rem] font-black uppercase tracking-wider pt-1 ${
+                              Math.abs(diferenciaConvertir) <= 1 ? 'text-emerald-600' : 'text-rose-600'
+                            }`}
+                          >
+                            <span>Diferencia</span>
+                            <span className="tabular-nums">${formatNumber(diferenciaConvertir)}</span>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  <div className="flex items-center justify-end gap-2 pt-1">
+                    <button
+                      onClick={() => setAccionPanel(null)}
+                      className="inline-flex items-center gap-1.5 border-2 border-slate-300 bg-white text-slate-700 hover:bg-slate-100 rounded-lg px-3 h-9 text-sm font-semibold transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={submitConvertir}
+                      className="inline-flex items-center gap-1.5 bg-[#4488ee] hover:bg-[#3672c9] text-white rounded-lg px-3 h-9 text-sm font-bold transition-colors shadow-sm shadow-[#4488ee]/20"
+                    >
+                      <FileCheck size={14} /> {tieneSaldo ? 'Convertir' : 'Sí, convertir'}
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
           </>
         )}
       </Modal>
-
-      <ConfirmModal
-        open={!!confirm}
-        mensaje={confirm?.mensaje}
-        textoAceptar={confirm?.textoAceptar}
-        textoCancelar="Cancelar"
-        onAceptar={confirm?.onAceptar}
-        onCancelar={() => setConfirm(null)}
-        danger={confirm?.danger}
-      />
     </div>
   );
 }

@@ -5,7 +5,7 @@ import {
   RefreshCw, Eye, EyeOff, Printer, ChevronLeft, ChevronRight, Loader2,
   DollarSign, Barcode as BarcodeIcon, AlertTriangle,
 } from 'lucide-react';
-import { formatNumber, parseFormattedNumber } from '../../utils/formatters';
+import { formatNumber, parseFormattedNumber, onChangeMoney } from '../../utils/formatters';
 import { generarHTMLParaCodigos } from '../../utils/printing';
 import {
   getProductos, getProducto, getProductosPorCategoria, getProductosInactivos,
@@ -722,21 +722,29 @@ export default function Inventario() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-600 uppercase tracking-wide mb-1.5">Precio Compra</label>
-                  <input
-                    type="text" required autoComplete="off"
-                    value={form.precioComprado}
-                    onChange={(e) => setForm({ ...form, precioComprado: e.target.value })}
-                    className="w-full border-2 border-slate-200 rounded-lg px-3 h-10 text-sm outline-none focus:border-[#4488ee] focus:ring-2 focus:ring-[#4488ee]/20 transition-all tabular-nums"
-                  />
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400 pointer-events-none">$</span>
+                    <input
+                      type="text" inputMode="numeric" required autoComplete="off"
+                      value={form.precioComprado}
+                      onChange={onChangeMoney(setForm, 'precioComprado')}
+                      placeholder="0"
+                      className="w-full border-2 border-slate-200 rounded-lg pl-7 pr-3 h-10 text-sm outline-none focus:border-[#4488ee] focus:ring-2 focus:ring-[#4488ee]/20 transition-all tabular-nums"
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-600 uppercase tracking-wide mb-1.5">Precio Venta</label>
-                  <input
-                    type="text" required autoComplete="off"
-                    value={form.precioVendido}
-                    onChange={(e) => setForm({ ...form, precioVendido: e.target.value })}
-                    className="w-full border-2 border-slate-200 rounded-lg px-3 h-10 text-sm outline-none focus:border-[#4488ee] focus:ring-2 focus:ring-[#4488ee]/20 transition-all tabular-nums"
-                  />
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400 pointer-events-none">$</span>
+                    <input
+                      type="text" inputMode="numeric" required autoComplete="off"
+                      value={form.precioVendido}
+                      onChange={onChangeMoney(setForm, 'precioVendido')}
+                      placeholder="0"
+                      className="w-full border-2 border-slate-200 rounded-lg pl-7 pr-3 h-10 text-sm outline-none focus:border-[#4488ee] focus:ring-2 focus:ring-[#4488ee]/20 transition-all tabular-nums"
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-600 uppercase tracking-wide mb-1.5">Stock Inicial</label>
@@ -752,12 +760,16 @@ export default function Inventario() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-600 uppercase tracking-wide mb-1.5">Precio Mayoreo</label>
-                  <input
-                    type="text" autoComplete="off"
-                    value={form.precioMayoreo}
-                    onChange={(e) => setForm({ ...form, precioMayoreo: e.target.value })}
-                    className="w-full border-2 border-slate-200 rounded-lg px-3 h-10 text-sm outline-none focus:border-[#4488ee] focus:ring-2 focus:ring-[#4488ee]/20 transition-all tabular-nums"
-                  />
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-slate-400 pointer-events-none">$</span>
+                    <input
+                      type="text" inputMode="numeric" autoComplete="off"
+                      value={form.precioMayoreo}
+                      onChange={onChangeMoney(setForm, 'precioMayoreo')}
+                      placeholder="0"
+                      className="w-full border-2 border-slate-200 rounded-lg pl-7 pr-3 h-10 text-sm outline-none focus:border-[#4488ee] focus:ring-2 focus:ring-[#4488ee]/20 transition-all tabular-nums"
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-600 uppercase tracking-wide mb-1.5">Garantía (meses)</label>

@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { toast } from 'sonner';
 import {
   Search, X, Filter, List, Calendar, Eye, Printer, FileText, Receipt,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, Wallet, Banknote,
 } from 'lucide-react';
 import { formatNumber, formatearFecha } from '../../utils/formatters';
 import {
@@ -77,12 +77,13 @@ const fmtHora = (fechaStr) =>
 function ColGroup({ agrupada }) {
   return (
     <colgroup>
-      <col style={{ width: agrupada ? '12%' : '11%' }} />
-      <col style={{ width: agrupada ? '26%' : '22%' }} />
+      <col style={{ width: agrupada ? '10%' : '10%' }} />
+      <col style={{ width: agrupada ? '22%' : '20%' }} />
+      <col style={{ width: agrupada ? '14%' : '13%' }} />
+      <col style={{ width: agrupada ? '12%' : '18%' }} />
       <col style={{ width: agrupada ? '16%' : '15%' }} />
-      <col style={{ width: agrupada ? '14%' : '22%' }} />
-      <col style={{ width: agrupada ? '16%' : '15%' }} />
-      <col style={{ width: agrupada ? '16%' : '15%' }} />
+      <col style={{ width: agrupada ? '14%' : '12%' }} />
+      <col style={{ width: agrupada ? '12%' : '12%' }} />
     </colgroup>
   );
 }
@@ -91,7 +92,7 @@ function TableHead({ agrupada, sticky }) {
   return (
     <thead className={sticky ? '' : 'bg-slate-50 border-b border-slate-200'}>
       <tr>
-        {['Factura ID', 'Cliente', 'Cédula/NIT', agrupada ? 'Hora' : 'Fecha y Hora', 'Total', 'Acciones'].map((h) => (
+        {['Factura ID', 'Cliente', 'Cédula/NIT', agrupada ? 'Hora' : 'Fecha y Hora', 'Pago', 'Total', 'Acciones'].map((h) => (
           <th
             key={h}
             className={`px-3 py-3 font-semibold text-slate-600 uppercase tracking-wide text-xs text-left whitespace-nowrap ${sticky ? 'sticky top-0 z-10 bg-slate-50 border-b border-slate-200' : ''
@@ -102,6 +103,32 @@ function TableHead({ agrupada, sticky }) {
         ))}
       </tr>
     </thead>
+  );
+}
+
+function PagoChip({ pagos }) {
+  if (!Array.isArray(pagos) || pagos.length === 0) {
+    return <span className="text-slate-300 text-xs italic">—</span>;
+  }
+  if (pagos.length === 1) {
+    const p = pagos[0];
+    const esEfectivo = p.cuentaRecaudo?.esEfectivo;
+    return (
+      <span className={`inline-flex items-center gap-1 px-2 h-6 rounded-full text-[0.7rem] font-bold ${
+        esEfectivo ? 'bg-emerald-50 text-emerald-700' : 'bg-sky-50 text-sky-700'
+      }`}>
+        {esEfectivo ? <Banknote size={11} /> : <Wallet size={11} />}
+        {p.cuentaRecaudo?.nombre || 'N/D'}
+      </span>
+    );
+  }
+  return (
+    <span
+      className="inline-flex items-center gap-1 px-2 h-6 rounded-full text-[0.7rem] font-bold bg-violet-50 text-violet-700"
+      title={pagos.map(p => `${p.cuentaRecaudo?.nombre}: $${formatNumber(p.monto)}`).join(' · ')}
+    >
+      <Wallet size={11} /> Mixto · {pagos.length}
+    </span>
   );
 }
 
@@ -123,6 +150,9 @@ const FilaFactura = memo(function FilaFactura({ factura, agrupada, onVerDetalles
         {agrupada
           ? fmtHora(factura.fechaEmision)
           : formatearFecha(new Date(factura.fechaEmision))}
+      </td>
+      <td className="px-3 py-2.5 truncate">
+        <PagoChip pagos={factura.pagos} />
       </td>
       <td className="px-3 py-2.5 text-[#4488ee] font-bold truncate tabular-nums">
         ${formatNumber(factura.total)}
@@ -182,6 +212,7 @@ export default function Ventas() {
 
   const [showDetalles, setShowDetalles] = useState(false);
   const [detallesFactura, setDetallesFactura] = useState([]);
+  const [pagosFactura, setPagosFactura] = useState([]);
   const [showImprimir, setShowImprimir] = useState(false);
   const [facturaSeleccionada, setFacturaSeleccionada] = useState(null);
 
@@ -219,13 +250,15 @@ export default function Ventas() {
 
   const verDetalles = useCallback(async (facturaId) => {
     try {
+      const factura = todasFacturas.find(f => f.id === facturaId);
+      setPagosFactura(Array.isArray(factura?.pagos) ? factura.pagos : []);
       const res = await getFacturaDetalles(facturaId);
       setDetallesFactura(res.data);
       setShowDetalles(true);
     } catch {
       toast.error('Error al cargar los detalles de la factura.');
     }
-  }, []);
+  }, [todasFacturas]);
 
   const abrirImprimir = useCallback((factura) => {
     setFacturaSeleccionada(factura);
@@ -363,7 +396,7 @@ export default function Ventas() {
                     <span className="ml-auto text-xs text-slate-500 font-semibold">{facturas.length} facturas</span>
                   </div>
                   <div className="overflow-x-auto">
-                    <table className="w-full table-fixed text-sm min-w-[900px]">
+                    <table className="w-full table-fixed text-sm min-w-[1050px]">
                       <ColGroup agrupada />
                       <TableHead agrupada />
                       <tbody>
@@ -385,7 +418,7 @@ export default function Ventas() {
           ) : (
             <div className="flex-1 min-h-0 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="h-full overflow-auto">
-                <table className="w-full table-fixed text-sm min-w-[1050px]">
+                <table className="w-full table-fixed text-sm min-w-[1200px]">
                   <ColGroup agrupada={false} />
                   <TableHead agrupada={false} sticky />
                   <tbody>
@@ -463,7 +496,38 @@ export default function Ventas() {
             <X size={20} />
           </button>
         </div>
-        <div className="overflow-x-auto max-h-[70vh]">
+        {pagosFactura.length > 0 && (
+          <div className="px-6 py-3 bg-slate-50 border-b border-slate-200">
+            <div className="flex items-center gap-1.5 text-[0.65rem] font-black text-slate-500 uppercase tracking-wider mb-2">
+              <Wallet size={12} /> Cuenta{pagosFactura.length === 1 ? '' : 's'} de recaudo
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {pagosFactura.map((p, i) => {
+                const esEfectivo = p.cuentaRecaudo?.esEfectivo;
+                return (
+                  <div
+                    key={i}
+                    className={`inline-flex items-center gap-2 px-3 h-8 rounded-lg border ${
+                      esEfectivo
+                        ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                        : 'bg-sky-50 border-sky-200 text-sky-800'
+                    }`}
+                  >
+                    {esEfectivo ? <Banknote size={14} /> : <Wallet size={14} />}
+                    <span className="text-xs font-bold">{p.cuentaRecaudo?.nombre || 'N/D'}</span>
+                    <span className="text-xs font-black tabular-nums">${formatNumber(p.monto)}</span>
+                    {p.referencia && (
+                      <span className="text-[0.65rem] text-slate-500 font-mono border-l border-slate-300 pl-2">
+                        {p.referencia}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+        <div className="overflow-x-auto max-h-[60vh]">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 border-b border-slate-200 sticky top-0">
               <tr>
